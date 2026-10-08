@@ -1,0 +1,19 @@
+{
+  "name": "@butterfly-record/share-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "butterfly-share — the optional self-hosted server that turns a local recording into a link.",
+  "license": "MIT",
+  "bin": { "butterfly-share": "./src/index.ts" },
+  "scripts": {
+    "start": "node src/index.ts",
+    "dev": "node --watch src/index.ts",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test test/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "typescript": "^6.0.3"
+  }
+}

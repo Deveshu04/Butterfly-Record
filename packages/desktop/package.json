@@ -1,0 +1,31 @@
+{
+  "name": "@butterfly-record/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Butterfly Record for Windows.",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "tauri": "tauri",
+    "vite:dev": "vite",
+    "vite:build": "vite build",
+    "check": "svelte-check --tsconfig ./tsconfig.json && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p test/tsconfig.json",
+    "test": "node --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@butterfly-record/core": "workspace:*",
+    "@butterfly-record/ui": "workspace:*",
+    "@tauri-apps/api": "^2.5.0",
+    "mediabunny": "^1.52.2"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^6.0.0",
+    "@tauri-apps/cli": "^2.5.0",
+    "@types/node": "^24.13.3",
+    "svelte": "^5.56.8",
+    "svelte-check": "^4.7.4",
+    "typescript": "^6.0.3",
+    "vite": "^7.0.0"
+  }
+}

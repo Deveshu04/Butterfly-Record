@@ -1,0 +1,18 @@
+{
+  "name": "@butterfly-record/e2e",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Playwright harness: drives real Chrome with the built extension (remux, camera bubble) and the built Windows app over CDP (desktop smoke test).",
+  "type": "module",
+  "scripts": {
+    "verify:remux": "node verify-remux.mjs",
+    "verify:bubble": "node verify-bubble.mjs",
+    "probe:permission": "node probe-permission.mjs",
+    "probe:real-camera": "node probe-real-camera.mjs",
+    "smoke:desktop": "node desktop-smoke.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.62.1",
+    "ws": "^8.21.1"
+  }
+}

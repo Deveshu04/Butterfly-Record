@@ -1,0 +1,10 @@
+{
+  // Tests run in Node; src runs in a browser. Keeping them in separate
+  // programs means a stray `process` or `Buffer` in src/ is a type error
+  // rather than something that only fails once it reaches Chrome.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}

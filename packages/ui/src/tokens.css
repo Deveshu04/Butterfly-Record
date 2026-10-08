@@ -1,0 +1,87 @@
+:root {
+  color-scheme: light dark;
+
+  --bg: light-dark(#fafafa, #161616);
+  --bg-sunken: light-dark(#f0f0f0, #101010);
+  --bg-elevated: light-dark(#ffffff, #1f1f1f);
+  --bg-overlay: light-dark(#ffffff, #262626);
+
+  --fg: light-dark(#1a1a1a, #ededed);
+  /* At least 4.5:1 on --bg, --bg-sunken and a hovered row in both themes. */
+  --fg-muted: light-dark(#646464, #9a9a9a);
+  /* At least 4.5:1 on --bg in both themes. */
+  --fg-faint: light-dark(#737373, #808080);
+
+  --hairline: light-dark(rgba(0, 0, 0, 0.12), rgba(255, 255, 255, 0.14));
+  --hairline-strong: light-dark(rgba(0, 0, 0, 0.22), rgba(255, 255, 255, 0.26));
+
+  --accent: light-dark(#1a1a1a, #ededed);
+  --accent-fg: light-dark(#ffffff, #161616);
+  --accent-hover: light-dark(#333333, #ffffff);
+
+  --record: light-dark(#e5484d, #ff6369);
+  /* Filled record buttons: --record-fg on it is at least 4.5:1, which --record is not. */
+  --record-strong: light-dark(#d13438, #c42b30);
+  --record-fg: #ffffff;
+  --danger: light-dark(#b3261e, #ff7369);
+  --caution: light-dark(#8a6d00, #d9b64a);
+  --ok: light-dark(#2f7d49, #5fc98f);
+
+  --fill-hover: light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.07));
+  --fill-active: light-dark(rgba(0, 0, 0, 0.09), rgba(255, 255, 255, 0.12));
+
+  /* Always dark in both themes: drawn over video and arbitrary web pages. */
+  --chrome-bg: rgba(20, 20, 20, 0.92);
+  --chrome-fg: #ededed;
+  --chrome-fg-muted: #9a9a9a;
+  --chrome-hairline: rgba(255, 255, 255, 0.14);
+  --chrome-fill-hover: rgba(255, 255, 255, 0.1);
+  /* Opaque variant for surfaces that sit over the desktop rather than a page. */
+  --chrome-bg-solid: #1c1c1c;
+  --chrome-fill-active: rgba(255, 255, 255, 0.16);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-md: 13px;
+  --text-lg: 15px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+
+  --focus: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+  --scrim: light-dark(rgba(0, 0, 0, 0.32), rgba(0, 0, 0, 0.56));
+
+  --radius-control: 6px;
+  --radius-sm: 4px;
+  --radius-card: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+
+  --shadow-pop: 0 8px 28px light-dark(rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0.5)),
+    0 1px 2px light-dark(rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.4));
+  --shadow-hud: 0 6px 24px rgba(0, 0, 0, 0.32);
+
+  --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "Cascadia Mono", Consolas, ui-monospace, monospace;
+
+  --motion-fast: 100ms ease;
+  --motion: 150ms ease;
+  --motion-slow: 240ms cubic-bezier(0.2, 0, 0, 1);
+
+  /* The injected UI has to outrank anything a host page can set. */
+  --z-annotate: 2147482999;
+  --z-hud: 2147483000;
+  --z-bubble: 2147483001;
+}
+
+/* Every themed token uses light-dark() (Chrome 123+), so color-scheme alone switches the theme. */
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }

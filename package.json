@@ -1,0 +1,23 @@
+{
+  "name": "butterfly-record",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Free, local-first screen recording that keeps your videos on your machine.",
+  "license": "MIT",
+  "scripts": {
+    "dev": "pnpm --filter @butterfly-record/extension dev",
+    "build": "pnpm --filter @butterfly-record/extension build",
+    "zip": "pnpm --filter @butterfly-record/extension zip",
+    "desktop:dev": "pnpm --filter @butterfly-record/desktop dev",
+    "desktop:build": "pnpm --filter @butterfly-record/desktop build",
+    "check": "pnpm -r check",
+    "test": "pnpm -r test",
+    "icons": "node scripts/gen-icons.mjs",
+    "version:set": "node scripts/set-version.mjs"
+  },
+  "devDependencies": {
+    "sharp": "^0.35.3",
+    "typescript": "^6.0.3"
+  }
+}

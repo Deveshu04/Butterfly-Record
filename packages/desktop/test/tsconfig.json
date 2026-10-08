@@ -1,0 +1,8 @@
+{
+  // Tests run in Node against the modules in src/lib that import neither Tauri nor Svelte.
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["./**/*.ts"]
+}

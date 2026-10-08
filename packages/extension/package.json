@@ -1,0 +1,26 @@
+{
+  "name": "@butterfly-record/extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Butterfly Record — the Chrome extension.",
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build",
+    "zip": "wxt zip",
+    "check": "wxt prepare && svelte-check --tsconfig ./tsconfig.json",
+    "postinstall": "wxt prepare"
+  },
+  "dependencies": {
+    "@butterfly-record/core": "workspace:*",
+    "@butterfly-record/ui": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.2.5",
+    "@wxt-dev/module-svelte": "^2.0.5",
+    "svelte": "^5.56.8",
+    "svelte-check": "^4.7.4",
+    "typescript": "^6.0.3",
+    "wxt": "^0.21.3"
+  }
+}

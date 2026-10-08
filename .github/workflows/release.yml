@@ -1,0 +1,82 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and draft the release
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Check the tag matches the package versions
+        id: version
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          node scripts/set-version.mjs --check "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/desktop/src-tauri -> target
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and zip the extension
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          rm -f dist/*.zip
+          pnpm zip
+          zips=(dist/*.zip)
+          if [ "${#zips[@]}" -ne 1 ] || [ ! -f "${zips[0]}" ]; then
+            echo "Expected one zip in dist/, found: ${zips[*]}" >&2
+            exit 1
+          fi
+          target="dist/butterfly-record-extension-$VERSION.zip"
+          [ "${zips[0]}" = "$target" ] || mv "${zips[0]}" "$target"
+
+      # Unsigned build; code signing would plug in here through bundle.windows.signCommand and its secrets.
+      - name: Build the installer and draft the release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: packages/desktop
+          tauriScript: pnpm tauri
+          tagName: ${{ github.ref_name }}
+          releaseName: Butterfly Record ${{ github.ref_name }}
+          releaseDraft: true
+          prerelease: false
+          releaseBody: |
+            Windows app: the installer ending in `_x64-setup.exe`. It installs for the current user and is not code-signed, so Windows SmartScreen may ask for confirmation.
+
+            Chrome extension: `butterfly-record-extension-${{ steps.version.outputs.version }}.zip`.
+
+            Install steps for both are in the README: ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/README.md
+
+      - name: Attach the extension to the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: gh release upload "$GITHUB_REF_NAME" "dist/butterfly-record-extension-$VERSION.zip" --clobber --repo "$GITHUB_REPOSITORY"

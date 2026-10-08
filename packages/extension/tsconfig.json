@@ -1,0 +1,15 @@
+{
+  "extends": "./.wxt/tsconfig.json",
+  "compilerOptions": {
+    // Listed explicitly: automatic @types discovery does not reach
+    // packages/extension/node_modules/@types through WXT's generated config,
+    // so the `chrome` global would otherwise be untyped. WXT's own types come
+    // in through the triple-slash references in .wxt/wxt.d.ts and are
+    // unaffected by this list.
+    "types": ["chrome"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "verbatimModuleSyntax": true
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Butterfly Record",
+  "version": "../package.json",
+  "identifier": "com.butterflylabs.record",
+  "build": {
+    "beforeDevCommand": "pnpm vite:dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "pnpm vite:build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost https://asset.localhost blob: data:; media-src 'self' asset: http://asset.localhost https://asset.localhost blob:; connect-src 'self' ipc: http://ipc.localhost https://ipc.localhost asset: http://asset.localhost https://asset.localhost; worker-src 'self' blob:; font-src 'self' data:",
+      "dangerousDisableAssetCspModification": ["style-src"],
+      "assetProtocol": {
+        "enable": true,
+        "scope": {
+          "allow": ["$VIDEO/Butterfly Record/**"],
+          "requireLiteralLeadingDot": false
+        }
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "publisher": "Butterfly Labs",
+    "copyright": "Copyright (c) 2026 Butterfly Labs",
+    "homepage": "https://github.com/butterfly-labs/butterfly-record",
+    "license": "MIT",
+    "licenseFile": "../../../LICENSE",
+    "category": "Video",
+    "shortDescription": "Free screen recorder that saves to your disk",
+    "longDescription": "Butterfly Record records your screen or a window with your microphone and saves each recording as a regular video file in your Videos folder. Recordings never leave your computer unless you choose to. With your own Sarvam API key you can transcribe any video, translate its subtitles, dub it into another Indian language and write a title and summary.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico",
+      "icons/icon.png"
+    ],
+    "windows": {
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "displayLanguageSelector": false,
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico",
+        "headerImage": "installer/header.bmp",
+        "sidebarImage": "installer/sidebar.bmp",
+        "installerHooks": "installer-hooks.nsh"
+      }
+    }
+  }
+}

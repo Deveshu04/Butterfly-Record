@@ -1,0 +1,23 @@
+{
+  "name": "@butterfly-record/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shell-agnostic recording engine: capture, audio mixing, encoding, storage. Consumed as TypeScript source by the extension and the desktop app.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "check": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
+    "test": "node --test test/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^4.2.0",
+    "mediabunny": "^1.52.2"
+  }
+}
