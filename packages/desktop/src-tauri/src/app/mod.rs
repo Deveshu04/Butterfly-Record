@@ -1,5 +1,6 @@
 //! Windows, tray, global shortcut and the quit guard.
 
+pub mod camera;
 pub mod tray;
 pub mod webview;
 
@@ -235,8 +236,8 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
                 request_quit(app);
             }
         }
-        // The HUD closes only through hud_close.
-        (HUD, WindowEvent::CloseRequested { api, .. }) => api.prevent_close(),
+        // The HUD and the camera overlay close only through hud_close and camera_close.
+        (HUD | camera::CAMERA, WindowEvent::CloseRequested { api, .. }) => api.prevent_close(),
         (MAIN, WindowEvent::ThemeChanged(_)) => {
             if let Some(main) = app.get_webview_window(MAIN) {
                 apply_background(&main);

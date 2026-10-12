@@ -60,6 +60,11 @@ access; if you decline, the recording has no narration.
 - Your **microphone** (pick the device and check it on a live level meter) and **system
   audio**: turn on **Share with system audio** in the screen picker. System audio is
   available for screen recordings, not single windows.
+- Your **camera** in a floating window you can put anywhere on any monitor: four frames
+  (circle, rounded, wide, tall), resizable by its corner or with Ctrl and the mouse
+  wheel, mirrored or not. Wherever you drag it is where it appears in the video, for
+  screen and window recordings alike. The recording bar can hide and show it while you
+  record, and it releases the camera as soon as you are done.
 - An optional 3-second **countdown**, and an option to minimize the window while
   recording.
 - A small **floating recording bar** with a timer, pause and resume, microphone mute,

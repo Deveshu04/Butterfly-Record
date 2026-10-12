@@ -27,7 +27,7 @@ pub fn browser_args() -> String {
 
 /// Makes the webview behave like part of a desktop app: no browser accelerator keys
 /// (reload, print, find, zoom, devtools), a context menu limited to editing commands, and
-/// microphone access for the app's own pages without a browser permission prompt.
+/// microphone and camera access for the app's own pages without a browser permission prompt.
 pub fn harden(window: &WebviewWindow) {
     #[cfg(windows)]
     {
@@ -63,7 +63,8 @@ unsafe fn configure(
 ) -> windows::core::Result<()> {
     use webview2_com::Microsoft::Web::WebView2::Win32::{
         ICoreWebView2Settings3, ICoreWebView2_11, COREWEBVIEW2_PERMISSION_KIND,
-        COREWEBVIEW2_PERMISSION_KIND_MICROPHONE, COREWEBVIEW2_PERMISSION_STATE_ALLOW,
+        COREWEBVIEW2_PERMISSION_KIND_CAMERA, COREWEBVIEW2_PERMISSION_KIND_MICROPHONE,
+        COREWEBVIEW2_PERMISSION_STATE_ALLOW,
     };
     use webview2_com::{
         take_pwstr, ContextMenuRequestedEventHandler, PermissionRequestedEventHandler,
@@ -83,9 +84,13 @@ unsafe fn configure(
             let Some(args) = args else { return Ok(()) };
             let mut kind = COREWEBVIEW2_PERMISSION_KIND::default();
             args.PermissionKind(&mut kind)?;
-            if kind != COREWEBVIEW2_PERMISSION_KIND_MICROPHONE {
+            let device = if kind == COREWEBVIEW2_PERMISSION_KIND_MICROPHONE {
+                "microphone"
+            } else if kind == COREWEBVIEW2_PERMISSION_KIND_CAMERA {
+                "camera"
+            } else {
                 return Ok(());
-            }
+            };
             let mut uri = PWSTR::null();
             args.Uri(&mut uri)?;
             let requested = tauri::Url::parse(&take_pwstr(uri))
@@ -94,7 +99,7 @@ unsafe fn configure(
             if requested == origin {
                 args.SetState(COREWEBVIEW2_PERMISSION_STATE_ALLOW)?;
             } else {
-                log::warn!("microphone request from {requested} left to the user");
+                log::warn!("{device} request from {requested} left to the user");
             }
             Ok(())
         })),

@@ -19,6 +19,8 @@ import { getVersion } from '@tauri-apps/api/app'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 
 import { displayVideoConstraints } from './app-settings.ts'
+import { camera, openCameraStream } from './camera.svelte.ts'
+import { compositeSupported, startCameraComposite, type CameraComposite } from './compositor.ts'
 import {
   appQuit,
   emitRecorderStatus,
@@ -50,12 +52,20 @@ const COUNTDOWN_SECONDS = 3
 /** Long enough for the minimize animation to finish before the first frame is captured. */
 const MINIMIZE_SETTLE_MS = 350
 
+/** How the camera reaches the file: recorded where it sits, or drawn into the frames. */
+type CameraMode = 'overlay' | 'composited'
+
 interface Active {
   id: string
   encoder: MediaRecorderEncoder
   mixer: AudioMixer | null
   capture: MediaStream
   mic: MediaStream | null
+  /** The camera the compositor reads; the overlay opens its own. */
+  cameraStream: MediaStream | null
+  composite: CameraComposite | null
+  /** Drops the compositor's subscription to where the overlay has been dragged. */
+  cameraWatch: (() => void) | null
   minimized: boolean
 }
 
@@ -65,6 +75,10 @@ function warn(context: string) {
 
 function abortError(): DOMException {
   return new DOMException('Cancelled', 'AbortError')
+}
+
+function stopTracks(stream: MediaStream | null): void {
+  for (const track of stream?.getTracks() ?? []) track.stop()
 }
 
 function sleep(ms: number, signal: AbortSignal): Promise<void> {
@@ -141,6 +155,8 @@ class Recorder {
   #countdown = $state<number | null>(null)
   #error = $state<string | null>(null)
   #lastSavedId = $state<string | null>(null)
+  #cameraMode = $state<CameraMode | null>(null)
+  #cameraVisible = $state(true)
 
   #active: Active | null = null
   #startAbort: AbortController | null = null
@@ -186,7 +202,23 @@ class Recorder {
       micMuted: this.#micMuted,
       hasMic: this.#hasMic,
       countdown: this.#countdown,
+      camera: this.#cameraStatus(),
     }).catch(() => {})
+  }
+
+  /** null while the recording does not use the camera, which hides the HUD toggle. */
+  #cameraStatus(): 'visible' | 'hidden' | null {
+    if (this.#cameraMode === null) return null
+    return this.#cameraVisible ? 'visible' : 'hidden'
+  }
+
+  /** The recording bar's camera toggle. */
+  setCameraVisible(visible: boolean): void {
+    if (this.#cameraMode === null || this.#cameraVisible === visible) return
+    this.#cameraVisible = visible
+    this.#active?.composite?.setHidden(!visible)
+    void camera.setVisible(visible).catch(warn('camera could not be hidden'))
+    this.#emitStatus()
   }
 
   #startTicker(): void {
@@ -224,9 +256,14 @@ class Recorder {
     this.#countdown = null
     this.#setPhase('starting')
 
+    const wanted = recording.camera
     let capture: MediaStream | null = null
     let mic: MediaStream | null = null
     let mixer: AudioMixer | null = null
+    let cameraStream: MediaStream | null = null
+    let composite: CameraComposite | null = null
+    let cameraWatch: (() => void) | null = null
+    let cameraMode: CameraMode | null = null
     let minimized = false
     let sessionId: string | null = null
 
@@ -238,7 +275,19 @@ class Recorder {
 
       const [videoTrack] = capture.getVideoTracks()
       if (!videoTrack) throw new Error('The capture produced no video.')
+      // What the picker gave back, which the user may have chosen against the setting.
       const { surface, label } = describeCapture(videoTrack)
+      const scope = surface === 'window' ? 'window' : 'screen'
+
+      if (wanted.enabled && (await camera.beginRecording(scope))) {
+        if (scope === 'window') {
+          // A window capture cannot see the overlay, so the frames are composed here instead.
+          cameraStream = await openCameraStream(wanted.deviceId)
+          if (cameraStream) cameraMode = 'composited'
+        } else {
+          cameraMode = 'overlay'
+        }
+      }
 
       const inputs: MixerInput[] = []
       // Loopback keeps playing on the speakers by itself, and monitoring the mic would feed back.
@@ -284,6 +333,37 @@ class Recorder {
       const videoBitsPerSecond = bitrateFor({ width, height, frameRate })
       const audioBitsPerSecond = audioBitrateFor(2)
 
+      const cameraTrack = cameraStream?.getVideoTracks()[0] ?? null
+      if (cameraMode === 'composited' && cameraTrack && compositeSupported()) {
+        // The overlay is a preview here, kept out of the capture, so where the user has put
+        // it on screen is the only thing that says where it belongs in the video.
+        const anchor = await camera.anchor()
+        try {
+          composite = startCameraComposite({
+            screen: videoTrack,
+            camera: cameraTrack,
+            shape: wanted.shape,
+            size: wanted.size,
+            anchor,
+            corner: wanted.corner,
+            mirror: wanted.mirror,
+            onFailed: (message) => (this.#error = message),
+          })
+          const running = composite
+          cameraWatch = camera.onPlacementChange((moved) => running.setPlacement(moved))
+        } catch (error) {
+          warn('the camera could not be composited')(error)
+        }
+      }
+      if (cameraMode === 'composited' && !composite) {
+        cameraMode = null
+        stopTracks(cameraStream)
+        cameraStream = null
+        await camera.endRecording()
+        this.#error =
+          'The camera could not be drawn into this window recording. It is recording without it.'
+      }
+
       const id = ulid()
       await sessionCreate(id)
       sessionId = id
@@ -311,7 +391,14 @@ class Recorder {
             channels: 2,
             tracks: mixer ? mixer.contributions() : [],
           },
-          camera: null,
+          camera: cameraMode
+            ? {
+                present: true,
+                mode: cameraMode,
+                shape: wanted.shape,
+                mirrored: wanted.mirror,
+              }
+            : null,
           title: defaultRecordingTitle(new Date()),
         }),
         media: null,
@@ -321,14 +408,26 @@ class Recorder {
       if (abort.signal.aborted) throw abortError()
 
       const encoder = new MediaRecorderEncoder()
-      const active: Active = { id, encoder, mixer, capture, mic, minimized }
+      const active: Active = {
+        id,
+        encoder,
+        mixer,
+        capture,
+        mic,
+        cameraStream,
+        composite,
+        cameraWatch,
+        minimized,
+      }
       this.#active = active
+      this.#cameraMode = cameraMode
+      this.#cameraVisible = true
       setActiveRecording(id)
       void library.refresh().catch(warn('library refresh failed'))
 
       await encoder.start({
         sessionId: id,
-        stream: composeRecordingStream(videoTrack, mixer?.track ?? null),
+        stream: composeRecordingStream(composite?.track ?? videoTrack, mixer?.track ?? null),
         width,
         height,
         frameRate,
@@ -356,13 +455,19 @@ class Recorder {
       this.#stopTicker()
       await active?.encoder.cancel().catch(warn('encoder cancel failed'))
       await mixer?.close().catch(warn('mixer close failed'))
+      cameraWatch?.()
+      composite?.close()
       for (const track of capture?.getTracks() ?? []) track.stop()
       for (const track of mic?.getTracks() ?? []) track.stop()
+      stopTracks(cameraStream)
+      await camera.endRecording().catch(warn('camera overlay could not be released'))
       if (sessionId) await this.#removeSession(sessionId)
       setActiveRecording(null)
       if (sessionId) void library.refresh().catch(warn('library refresh failed'))
       this.#countdown = null
       this.#hasMic = false
+      this.#cameraMode = null
+      this.#cameraVisible = true
       this.#setPhase('idle')
       await hudClose().catch(warn('HUD could not close'))
       if (minimized) await restoreMainWindow().catch(warn('window restore failed'))
@@ -388,8 +493,11 @@ class Recorder {
 
   async #release(active: Active): Promise<void> {
     await active.mixer?.close().catch(warn('mixer close failed'))
+    active.cameraWatch?.()
+    active.composite?.close()
     for (const track of active.capture.getTracks()) track.stop()
     for (const track of active.mic?.getTracks() ?? []) track.stop()
+    stopTracks(active.cameraStream)
   }
 
   /** Common tail of stop and discard: hardware off, HUD closed, window back. */
@@ -400,6 +508,10 @@ class Recorder {
     this.#stopTicker()
     this.#hasMic = false
     this.#micMuted = false
+    this.#cameraMode = null
+    this.#cameraVisible = true
+    // The overlay stays only if the Record page is still showing it.
+    await camera.endRecording().catch(warn('camera overlay could not be released'))
     this.#setPhase('idle')
     await hudClose().catch(warn('HUD could not close'))
     if (active.minimized) await restoreMainWindow().catch(warn('window restore failed'))
@@ -601,6 +713,12 @@ function handleHudAction(action: HudActionName): void {
       break
     case 'discard':
       void recorder.discard()
+      break
+    case 'camera-show':
+      recorder.setCameraVisible(true)
+      break
+    case 'camera-hide':
+      recorder.setCameraVisible(false)
       break
   }
 }

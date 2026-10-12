@@ -11,6 +11,15 @@ covers features, the build and known limitations.
   microphone and, for screen recordings, system audio. An optional 3-second countdown.
   Pause, resume, mute and discard from a small recording bar that stays on top and out
   of the recording itself.
+- **Camera.** Turn the camera on from the Record page and a small floating window shows
+  your webcam. Drag it anywhere on any monitor, resize it from its bottom-right corner or
+  with Ctrl and the mouse wheel, choose a frame (circle, rounded, wide or tall) and mirror
+  it or not. Screen recordings capture it exactly where you put it. A single-window
+  capture cannot see another window, so there the camera is drawn into the frames at the
+  matching place: the overlay's position on its monitor, as a fraction of the work area,
+  becomes the same fraction of the recorded frame, and moving it during a recording moves
+  it in the video. The recording bar can hide and show it while you record, and it closes
+  and releases the camera as soon as you stop or leave the Record page.
 - **Alt+Shift+R** opens New recording from anywhere, or stops a recording in progress;
   the menu of the notification-area icon does the same. Closing the window leaves the
   app running there unless you turn that off in Settings.
@@ -97,6 +106,12 @@ variables exist for it and for debugging:
   when "Share with system audio" is turned on in the picker. Audio from one app alone
   cannot be recorded.
 - There is no region capture: the whole screen or one window.
+- The camera is recorded at the size and position of its window, not at the camera's own
+  resolution, so a small overlay enlarged afterwards will look soft.
+- In a window recording the camera's place is taken from where the overlay sits on its
+  monitor, because a window capture is never told where the recorded window is on screen.
+  If that window covers only part of the screen, the camera lands at the matching fraction
+  of the video rather than over the same point of the desktop.
 - The shortcut and the tray open the recorder but cannot start it by themselves: the
   screen picker needs a click or a key press in the app window.
 - The screen picker is WebView2's own and refers to the app as "tauri.localhost".

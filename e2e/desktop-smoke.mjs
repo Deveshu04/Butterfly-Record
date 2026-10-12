@@ -5,7 +5,8 @@
 // Needs `pnpm desktop:build` first. Optional: SMOKE_SCREENSHOTS=<dir> saves screenshots of
 // every view while the test runs; SMOKE_KEEP=1 keeps the scratch folders for inspection;
 // SMOKE_CAPTURE=fake swaps the real screen for Chromium's generated test pattern and adds a
-// generated microphone (no real audio device is ever opened).
+// generated microphone and camera (no real audio or camera device is ever opened), and turns
+// the camera overlay on so it is covered too.
 
 import { chromium } from 'playwright'
 import { execFileSync, spawn } from 'node:child_process'
@@ -50,10 +51,46 @@ const TEST_SETTINGS = {
     microphoneId: null,
     countdown: true,
     hideWindow: true,
+    // Only the generated camera is used; a real webcam stays closed.
+    camera: {
+      enabled: FAKE_CAPTURE,
+      deviceId: null,
+      shape: 'wide',
+      size: 240,
+      mirror: true,
+      // Where the overlay is placed when it has no saved position; there is no corner control.
+      corner: 'bottom-right',
+      position: null,
+    },
   },
 }
 
-const report = { ok: false, startedAt: new Date().toISOString(), checks: [], recording: null, imported: null }
+const report = { ok: false, startedAt: new Date().toISOString(), checks: [], recording: null, imported: null, camera: null }
+
+/** The overlay window's page, or null when it is not open. */
+function cameraPage(context) {
+  return context.pages().find((page) => page.url().includes('/camera.html')) ?? null
+}
+
+/** What the overlay is actually showing, read from the page itself. */
+function cameraFeed(page) {
+  return page.evaluate(() => {
+    const video = document.querySelector('video')
+    const frame = document.querySelector('.frame')
+    const box = frame?.getBoundingClientRect()
+    return {
+      videoWidth: video?.videoWidth ?? 0,
+      readyState: video?.readyState ?? 0,
+      unavailable: Boolean(document.querySelector('.placeholder')),
+      radius: frame ? getComputedStyle(frame).borderRadius : null,
+      mirrored: video ? getComputedStyle(video).transform.startsWith('matrix(-1') : false,
+      width: Math.round(box?.width ?? 0),
+      height: Math.round(box?.height ?? 0),
+      innerWidth: window.innerWidth,
+      innerHeight: window.innerHeight,
+    }
+  })
+}
 
 function check(name, passed, detail) {
   log(`[check] ${passed ? 'PASS' : 'FAIL'} ${name}`)
@@ -254,6 +291,29 @@ async function main() {
 
     await go(mainWindow, '#/record')
     await shot(mainWindow, 'record-idle')
+
+    // Camera overlay: open on the Record page, live, in the configured frame
+
+    if (FAKE_CAPTURE) {
+      const overlay = await waitFor('the camera overlay window', 20_000, async () => cameraPage(context))
+      const feed = await waitFor('the camera overlay to show a picture', 20_000, async () => {
+        const current = await cameraFeed(overlay).catch(() => null)
+        // Not just non-zero: a shape hint a camera cannot meet can crop the picture to almost
+        // nothing, which still reports a width.
+        return current?.videoWidth >= 32 && current.readyState >= 2 ? current : null
+      })
+      check('the camera overlay shows a live picture', !feed.unavailable, feed)
+      // 16:9, the 'wide' frame in TEST_SETTINGS; a circle would be square instead.
+      const ratio = feed.innerWidth / feed.innerHeight
+      check('the overlay keeps the frame aspect ratio', Math.abs(ratio - 16 / 9) < 0.05, {
+        ratio,
+        size: [feed.innerWidth, feed.innerHeight],
+      })
+      check('the overlay is mirrored', feed.mirrored, feed.mirrored)
+      await shot(overlay, 'camera-overlay')
+      report.camera = { feed }
+    }
+
     log('[step] clicking Start recording')
     await mainWindow.getByRole('button', { name: 'Start recording' }).click()
 
@@ -290,6 +350,15 @@ async function main() {
     const mediaBytes = fileSize(mediaFile)
     check('the .webm is not empty', mediaBytes > 0, { bytes: mediaBytes, partBytesBeforeStop })
     check('manifest is ready', manifest.status === 'ready', manifest.status)
+    if (FAKE_CAPTURE) {
+      const camera = manifest.camera
+      check(
+        'manifest records the camera',
+        camera?.present === true && camera.mode === 'overlay' && camera.shape === 'wide' && camera.mirrored === true,
+        camera,
+      )
+      report.camera.manifest = camera
+    }
     check('manifest points at the file', manifest.media.path === webms[0] && manifest.media.external === false, manifest.media)
     check('source.part is gone', !fs.existsSync(part))
     check('poster.jpg exists', true, { bytes: fileSize(path.join(sessionDir, 'poster.jpg')) })
@@ -319,6 +388,14 @@ async function main() {
 
     await waitFor('the video page', 15_000, async () => mainWindow.url().includes(`#/video/${id}`))
     check('the app opened the new video', true, mainWindow.url())
+
+    if (FAKE_CAPTURE) {
+      // Leaving the Record page must close the overlay, or the camera light stays on.
+      const closed = await waitFor('the camera overlay to close', 20_000, async () =>
+        cameraPage(context) === null ? true : null,
+      ).catch(() => false)
+      check('the camera is released after recording', closed === true)
+    }
 
     // Import a copy from outside the library folder
 

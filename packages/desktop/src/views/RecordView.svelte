@@ -1,6 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { Icon, type IconName } from '@butterfly-record/ui'
+  import { camera, listCameras } from '../lib/camera.svelte.ts'
+  import {
+    CAMERA_SIZE_STEP,
+    MAX_CAMERA_SIZE,
+    MIN_CAMERA_SIZE,
+    type CameraShape,
+  } from '../lib/camera-layout.ts'
   import { listMicrophones, recorder } from '../lib/recorder.svelte.ts'
   import { settings, type AppSettings } from '../lib/settings.svelte.ts'
   import Button from '../components/Button.svelte'
@@ -15,14 +22,18 @@
   import { toasts } from '../components/toasts.svelte.ts'
 
   type Recording = AppSettings['recording']
+  type Camera = Recording['camera']
 
   const uid = $props.id()
   const recording = $derived(settings.value.recording)
+  const cam = $derived(recording.camera)
   const phase = $derived(recorder.phase)
   const live = $derived(phase === 'recording' || phase === 'paused')
 
   let microphones = $state<{ id: string; label: string }[]>([])
   let microphonesLoaded = $state(false)
+  let cameras = $state<{ id: string; label: string }[]>([])
+  let camerasLoaded = $state(false)
   let startButton: HTMLButtonElement | undefined = $state()
 
   const SOURCES: { value: Recording['scope']; label: string; description: string; icon: IconName }[] = [
@@ -42,6 +53,13 @@
     { value: 60 as const, label: '60 fps' },
   ]
 
+  const FRAMES: { value: CameraShape; label: string; icon: IconName }[] = [
+    { value: 'circle', label: 'Circle', icon: 'shape-circle' },
+    { value: 'rounded', label: 'Rounded', icon: 'shape-rounded' },
+    { value: 'wide', label: 'Wide', icon: 'shape-wide' },
+    { value: 'tall', label: 'Tall', icon: 'shape-tall' },
+  ]
+
   /** The saved device is gone; the recorder will use the system default instead. */
   const missingMic = $derived(
     microphonesLoaded &&
@@ -54,6 +72,27 @@
     ...(missingMic ? [{ value: recording.microphoneId, label: 'Unavailable device (using system default)' }] : []),
     ...microphones.map((mic) => ({ value: mic.id, label: mic.label })),
   ])
+
+  const missingCamera = $derived(
+    camerasLoaded && cam.deviceId !== null && !cameras.some((device) => device.id === cam.deviceId),
+  )
+
+  const cameraOptions = $derived([
+    { value: null, label: 'Default camera' },
+    ...(missingCamera ? [{ value: cam.deviceId, label: 'Unavailable camera (using the default)' }] : []),
+    ...cameras.map((device) => ({ value: device.id, label: device.label })),
+  ])
+
+  /** Quiet line under the switch: the overlay shows its own placeholder. */
+  const cameraNotice = $derived(
+    !cam.enabled
+      ? null
+      : camera.status === 'error'
+        ? (camera.error ?? 'The camera is unavailable. The recording will have no camera.')
+        : missingCamera
+          ? 'That camera is no longer connected, so the default one is used.'
+          : null,
+  )
 
   const statusText = $derived(
     phase === 'starting'
@@ -77,6 +116,12 @@
     }
   }
 
+  /** Camera settings reach the overlay window as well as the settings file. */
+  async function changeCamera(patch: (draft: Camera) => void) {
+    await change((draft) => patch(draft.camera))
+    await camera.apply()
+  }
+
   async function loadMicrophones() {
     try {
       microphones = await listMicrophones()
@@ -86,21 +131,68 @@
     }
   }
 
+  async function loadCameras() {
+    try {
+      cameras = await listCameras()
+      camerasLoaded = true
+    } catch (error) {
+      toasts.error(error)
+    }
+  }
+
+  async function toggleCamera(on: boolean) {
+    await change((draft) => (draft.camera.enabled = on))
+    if (on && cameras.length === 0) void loadCameras()
+    await camera.preview(on)
+  }
+
+  async function setScope(scope: Recording['scope']) {
+    await change((draft) => (draft.scope = scope))
+    // Screen recordings capture the overlay where it sits; window recordings must not.
+    await camera.apply()
+  }
+
   onMount(() => {
     if (recording.microphoneEnabled) void loadMicrophones()
+    if (recording.camera.enabled) void loadCameras()
+    void camera.preview(true)
     // Arriving from the tray or Alt+Shift+R: one key press away from the picker.
     if (phase === 'idle') startButton?.focus()
-    const refresh = () => void loadMicrophones()
+    const refresh = () => {
+      void loadMicrophones()
+      if (recording.camera.enabled) void loadCameras()
+    }
     navigator.mediaDevices?.addEventListener('devicechange', refresh)
-    return () => navigator.mediaDevices?.removeEventListener('devicechange', refresh)
+    return () => {
+      navigator.mediaDevices?.removeEventListener('devicechange', refresh)
+      // A running recording keeps the overlay; otherwise the camera light goes out here.
+      void camera.preview(false)
+    }
   })
 
   function sourceKey(event: KeyboardEvent) {
     if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return
     event.preventDefault()
     const next = recording.scope === 'screen' ? 'window' : 'screen'
-    void change((draft) => (draft.scope = next))
+    void setScope(next)
     document.getElementById(`${uid}-source-${next}`)?.focus()
+  }
+
+  function step(event: KeyboardEvent): number {
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') return -1
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') return 1
+    return 0
+  }
+
+  function frameKey(event: KeyboardEvent) {
+    const move = step(event)
+    if (move === 0) return
+    event.preventDefault()
+    const index = FRAMES.findIndex((frame) => frame.value === cam.shape)
+    const next = FRAMES[(index + move + FRAMES.length) % FRAMES.length]
+    if (!next) return
+    void changeCamera((draft) => (draft.shape = next.value))
+    document.getElementById(`${uid}-frame-${next.value}`)?.focus()
   }
 
   async function discard() {
@@ -139,7 +231,7 @@
             role="radio"
             aria-checked={checked}
             tabindex={checked ? 0 : -1}
-            onclick={() => change((draft) => (draft.scope = source.value))}
+            onclick={() => setScope(source.value)}
             onkeydown={sourceKey}
           >
             <span class="source-icon"><Icon name={source.icon} size={28} strokeWidth={1.4} /></span>
@@ -175,6 +267,73 @@
             {/if}
           {/snippet}
         </SettingRow>
+        <SettingRow label="Camera" labelId="{uid}-camera">
+          {#if cam.enabled}
+            <Select
+              size="md"
+              label="Camera device"
+              value={cam.deviceId}
+              options={cameraOptions}
+              onchange={(id) => changeCamera((draft) => (draft.deviceId = id))}
+            />
+          {/if}
+          <Switch labelledby="{uid}-camera" checked={cam.enabled} onchange={toggleCamera} />
+          {#snippet below()}
+            {#if cameraNotice}
+              <p class="camera-notice">{cameraNotice}</p>
+            {/if}
+          {/snippet}
+        </SettingRow>
+        {#if cam.enabled}
+          <SettingRow label="Frame" stacked>
+            <div class="frames" role="radiogroup" aria-label="Camera frame">
+              {#each FRAMES as frame (frame.value)}
+                {@const checked = cam.shape === frame.value}
+                <button
+                  type="button"
+                  id="{uid}-frame-{frame.value}"
+                  class="frame"
+                  role="radio"
+                  aria-checked={checked}
+                  tabindex={checked ? 0 : -1}
+                  onclick={() => changeCamera((draft) => (draft.shape = frame.value))}
+                  onkeydown={frameKey}
+                >
+                  <Icon name={frame.icon} size={20} />
+                  <span>{frame.label}</span>
+                </button>
+              {/each}
+            </div>
+          </SettingRow>
+          <SettingRow label="Size" for="{uid}-size">
+            <span class="scale">Small</span>
+            <input
+              id="{uid}-size"
+              class="slider"
+              type="range"
+              min={MIN_CAMERA_SIZE}
+              max={MAX_CAMERA_SIZE}
+              step={CAMERA_SIZE_STEP}
+              value={cam.size}
+              onchange={(event) =>
+                changeCamera((draft) => (draft.size = Number(event.currentTarget.value)))}
+            />
+            <span class="scale">Large</span>
+          </SettingRow>
+          <SettingRow label="Mirror" description="Shows your camera the way you see yourself." labelId="{uid}-mirror">
+            <Switch
+              labelledby="{uid}-mirror"
+              checked={cam.mirror}
+              onchange={(on) => changeCamera((draft) => (draft.mirror = on))}
+            />
+          </SettingRow>
+          <SettingRow
+            label="Position"
+            description="Drag the camera anywhere on your screen. Window recordings put it in the matching spot in the video."
+          >
+            <Button onclick={() => camera.resetPosition()}>Reset position</Button>
+          </SettingRow>
+        {/if}
         <SettingRow label="Quality" description="The most it records at. A smaller screen is never upscaled." for="{uid}-quality">
           <Select
             id="{uid}-quality"
@@ -388,6 +547,82 @@
     border: 1px solid var(--hairline);
     border-radius: var(--radius-card);
     background: var(--bg-elevated);
+  }
+
+  .camera-notice {
+    margin: 0;
+    color: var(--fg-muted);
+    font-size: var(--text-sm);
+    line-height: 16px;
+  }
+
+  .frames {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    width: 100%;
+    overflow: hidden;
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--radius-control);
+  }
+
+  .frame {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-2) var(--space-1);
+    border: none;
+    border-left: 1px solid var(--hairline);
+    background: var(--bg-elevated);
+    color: var(--fg-muted);
+    font: inherit;
+    font-size: var(--text-sm);
+    line-height: 16px;
+    cursor: pointer;
+    transition: background-color var(--motion-fast);
+  }
+
+  .frame:first-child {
+    border-left: none;
+  }
+
+  .frame:hover {
+    background: var(--fill-hover);
+  }
+
+  .frame:active {
+    background: var(--fill-active);
+  }
+
+  .frame[aria-checked='true'] {
+    background: color-mix(in srgb, var(--accent) 12%, var(--bg-elevated));
+    color: var(--fg);
+    font-weight: 500;
+  }
+
+  /* The group is clipped to its rounded corners, which would cut a focus ring outside it. */
+  .frame:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+
+  .scale {
+    color: var(--fg-muted);
+    font-size: var(--text-sm);
+  }
+
+  .slider {
+    width: 148px;
+    height: 20px;
+    margin: 0;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+
+  .slider:focus-visible {
+    outline: none;
+    box-shadow: var(--focus);
+    border-radius: var(--radius-pill);
   }
 
   .note {

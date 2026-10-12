@@ -72,6 +72,20 @@
             <Icon name="pause" size={16} />
           </button>
         {/if}
+        {#if status?.camera}
+          {@const hidden = status.camera === 'hidden'}
+          <button
+            type="button"
+            class="icon"
+            class:off={hidden}
+            title={hidden ? 'Show camera' : 'Hide camera'}
+            aria-label={hidden ? 'Show camera' : 'Hide camera'}
+            aria-pressed={hidden}
+            onclick={() => send(hidden ? 'camera-show' : 'camera-hide')}
+          >
+            <Icon name={hidden ? 'camera-off' : 'camera'} size={16} />
+          </button>
+        {/if}
         {#if status?.hasMic}
           <button
             type="button"

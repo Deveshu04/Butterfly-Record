@@ -5,6 +5,10 @@
     | 'window'
     | 'camera'
     | 'camera-off'
+    | 'shape-circle'
+    | 'shape-rounded'
+    | 'shape-wide'
+    | 'shape-tall'
     | 'mic'
     | 'mic-off'
     | 'close'
@@ -59,6 +63,10 @@
     window: '<rect x="3" y="6" width="14" height="12" rx="2"/><path d="M8 6V4.5a1.5 1.5 0 0 1 1.5-1.5h10A1.5 1.5 0 0 1 21 4.5v10a1.5 1.5 0 0 1-1.5 1.5H18"/>',
     camera: '<rect x="2.5" y="6" width="13" height="12" rx="2.5"/><path d="M15.5 10.5 21 7.5v9l-5.5-3z"/>',
     'camera-off': '<path d="M15.5 10.5 21 7.5v9l-2-1.1"/><path d="M12.5 6H13a2.5 2.5 0 0 1 2.5 2.5V9M2.5 8.5A2.5 2.5 0 0 1 5 6h1.5M2.5 8.5v7A2.5 2.5 0 0 0 5 18h8a2.5 2.5 0 0 0 2.4-1.8"/><path d="m3 3 18 18"/>',
+    'shape-circle': '<circle cx="12" cy="12" r="8"/>',
+    'shape-rounded': '<rect x="4" y="4" width="16" height="16" rx="2.4"/>',
+    'shape-wide': '<rect x="2.5" y="7" width="19" height="10" rx="1.5"/>',
+    'shape-tall': '<rect x="6" y="3.5" width="12" height="17" rx="1.8"/>',
     mic: '<rect x="9" y="2.5" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/>',
     'mic-off': '<path d="M15 4.5A3 3 0 0 0 9 5v5m0 2.5a3 3 0 0 0 5.7 1.3"/><path d="M5.5 11a6.5 6.5 0 0 0 10.2 5.3M18.5 11v.5M12 17.5V21M8.5 21h7"/><path d="m3 3 18 18"/>',
     close: '<path d="m5 5 14 14M19 5 5 19"/>',

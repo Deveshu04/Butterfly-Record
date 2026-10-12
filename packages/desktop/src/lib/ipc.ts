@@ -5,6 +5,8 @@ import type { RecordingManifest } from '@butterfly-record/core'
 import { invoke } from '@tauri-apps/api/core'
 import { emitTo, listen, type UnlistenFn } from '@tauri-apps/api/event'
 
+import type { CameraAnchor, CameraCorner, CameraShape } from './camera-layout.ts'
+
 export interface IpcError {
   code: string
   message: string
@@ -161,9 +163,53 @@ export interface RecorderStatus {
   micMuted: boolean
   hasMic: boolean
   countdown: number | null
+  /** null = the recording does not use the camera, so the HUD hides its toggle. */
+  camera: 'visible' | 'hidden' | null
 }
 
-export type HudActionName = 'stop' | 'pause' | 'resume' | 'mute' | 'unmute' | 'discard'
+export type HudActionName =
+  | 'stop'
+  | 'pause'
+  | 'resume'
+  | 'mute'
+  | 'unmute'
+  | 'discard'
+  | 'camera-show'
+  | 'camera-hide'
+
+// Camera overlay window
+
+/** Top-left of the overlay in physical screen pixels. */
+export interface CameraPlacement {
+  x: number
+  y: number
+}
+
+export interface CameraOpenOptions {
+  /** Logical size. */
+  width: number
+  height: number
+  /** Physical screen pixels; null places the window by `corner`. */
+  x: number | null
+  y: number | null
+  corner: CameraCorner
+  /** True in window recordings, where the overlay is a preview and must not be captured. */
+  protected: boolean
+}
+
+/** What the overlay window needs to show the right camera in the right frame. */
+export interface CameraConfig {
+  deviceId: string | null
+  shape: CameraShape
+  mirror: boolean
+  /** Hides the hover outline and the resize grip. */
+  recording: boolean
+}
+
+export interface CameraState {
+  status: 'starting' | 'live' | 'error'
+  message: string | null
+}
 
 export interface HudAction {
   action: HudActionName
@@ -291,6 +337,23 @@ export const fsCommit = (handle: number) => call<CommitResult>('fs_commit', { ha
 export const fsDiscard = (handle: number) => call<void>('fs_discard', { handle })
 export const fsUncommit = (id: string, path: string) => call<void>('fs_uncommit', { id, path })
 
+// Camera overlay window
+
+export const cameraOpen = (options: CameraOpenOptions) =>
+  call<CameraPlacement>('camera_open', options as unknown as Record<string, unknown>)
+export const cameraClose = () => call<void>('camera_close')
+export const cameraSetVisible = (visible: boolean) =>
+  call<void>('camera_set_visible', { visible })
+/** Logical size, keeping the top-left where it is. */
+export const cameraSetSize = (width: number, height: number) =>
+  call<void>('camera_set_size', { width, height })
+export const cameraSetProtected = (isProtected: boolean) =>
+  call<void>('camera_set_protected', { protected: isProtected })
+export const cameraResetPosition = (corner: CameraCorner) =>
+  call<CameraPlacement>('camera_reset_position', { corner })
+/** Where the overlay sits on its monitor, as fractions; null when it is closed or off-screen. */
+export const cameraAnchor = () => call<CameraAnchor | null>('camera_anchor')
+
 // Settings and app
 
 export const settingsGet = () => call<Record<string, unknown>>('settings_get')
@@ -342,3 +405,14 @@ export const emitRecorderStatus = (status: RecorderStatus) =>
 
 export const emitHudAction = (action: HudActionName) =>
   emitTo('main', 'hud-action', { action } satisfies HudAction)
+
+export const emitCameraConfig = (config: CameraConfig) =>
+  emitTo('camera', 'camera-config', config)
+
+export const onCameraConfig = (handler: (config: CameraConfig) => void): Promise<UnlistenFn> =>
+  listen<CameraConfig>('camera-config', (event) => handler(event.payload))
+
+export const emitCameraState = (state: CameraState) => emitTo('main', 'camera-state', state)
+
+export const onCameraState = (handler: (state: CameraState) => void): Promise<UnlistenFn> =>
+  listen<CameraState>('camera-state', (event) => handler(event.payload))

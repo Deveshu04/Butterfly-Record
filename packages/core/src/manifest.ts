@@ -67,9 +67,9 @@ export interface RecordingManifest {
   }
   camera: {
     present: boolean
-    /** overlay = bubble drawn on the page and captured with it. */
+    /** overlay = bubble captured with the screen; composited = drawn into the frames. */
     mode: 'overlay' | 'composited' | 'only'
-    shape: 'circle'
+    shape: 'circle' | 'rounded' | 'wide' | 'tall'
     mirrored: boolean
   } | null
   pauses: PauseSpan[]

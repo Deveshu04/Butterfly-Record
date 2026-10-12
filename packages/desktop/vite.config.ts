@@ -33,8 +33,8 @@ export default defineConfig(({ mode }) => ({
     // The bundle loads from disk inside the app, so one large chunk costs nothing to fetch.
     chunkSizeWarningLimit: 1024,
     rollupOptions: {
-      // The recording bar is its own window with its own page.
-      input: { main: 'index.html', hud: 'hud.html' },
+      // The recording bar and the camera overlay are their own windows with their own pages.
+      input: { main: 'index.html', hud: 'hud.html', camera: 'camera.html' },
     },
   },
 }))

@@ -3,7 +3,7 @@
 // production build, where nothing calls it, keeps none of this file.
 
 import { createManifest, ulid } from '@butterfly-record/core'
-import { emit } from '@tauri-apps/api/event'
+import { emit, listen } from '@tauri-apps/api/event'
 import { mockIPC, mockWindows } from '@tauri-apps/api/mocks'
 
 import { FILLER_LINES, PLANNING_LINES, ROOT, VIDEOS, type MockVideo } from './mock-data.ts'
@@ -35,6 +35,12 @@ export function installMock() {
   let keyPresent = true
   let pendingJobs: unknown[] = []
   const cancelled = new Set<string>()
+  /** The camera overlay: a real window in the app, a couple of fields here. */
+  const CAMERA_HOME = { x: 1480, y: 760 }
+  /** There are no monitors here, so the overlay is placed against a nominal 1080p desktop. */
+  const CAMERA_WORK_AREA = { width: 1920, height: 1080 }
+  let cameraOpen = false
+  let cameraPlacement = CAMERA_HOME
 
   function fail(code: string, message: string): never {
     throw { code, message } satisfies IpcError
@@ -477,6 +483,36 @@ export function installMock() {
       case 'app_quit':
         return null
 
+      case 'camera_open': {
+        cameraOpen = true
+        cameraPlacement = {
+          x: Number(args.x ?? cameraPlacement.x),
+          y: Number(args.y ?? cameraPlacement.y),
+        }
+        // No overlay window exists here, so the mock plays its part of the handshake.
+        void emit('camera-state', { status: 'starting', message: null })
+        setTimeout(() => void emit('camera-state', { status: 'live', message: null }), 400)
+        return cameraPlacement
+      }
+      case 'camera_close':
+        cameraOpen = false
+        return null
+      case 'camera_set_visible':
+      case 'camera_set_size':
+      case 'camera_set_protected':
+        return null
+      case 'camera_reset_position':
+        if (!cameraOpen) fail('not_found', 'The camera overlay is not open.')
+        cameraPlacement = CAMERA_HOME
+        return cameraPlacement
+      case 'camera_anchor':
+        return cameraOpen
+          ? {
+              x: cameraPlacement.x / CAMERA_WORK_AREA.width,
+              y: cameraPlacement.y / CAMERA_WORK_AREA.height,
+            }
+          : null
+
       case 'sarvam_key_status':
         return { present: keyPresent }
       case 'sarvam_key_set':
@@ -549,9 +585,12 @@ export function installMock() {
         return true
       case 'plugin:window|is_minimized':
         return false
-      case 'plugin:event|emit_to':
-        await emit(String(args.event), args.payload)
-        return null
+      // Only the page itself exists in a browser, so the camera window is never found and
+      // its moves are simply not remembered.
+      case 'plugin:window|get_all_windows':
+        return [label]
+      case 'plugin:window|scale_factor':
+        return window.devicePixelRatio
       default:
         if (cmd.startsWith('plugin:')) return null
         fail('invalid_argument', `The mock does not implement ${cmd}.`)
@@ -561,6 +600,17 @@ export function installMock() {
   function startHudFeed() {
     const params = new URLSearchParams(location.search)
     const phase = params.get('phase') ?? 'recording'
+    // `?camera=visible|hidden` brings up the camera toggle; without it the recording has none.
+    const requested = params.get('camera')
+    let camera: 'visible' | 'hidden' | null =
+      requested === 'visible' || requested === 'hidden' ? requested : null
+    if (camera) {
+      // Nothing is recording, so the bar answers its own camera toggle.
+      void listen<{ action: string }>('hud-action', ({ payload }) => {
+        if (payload.action === 'camera-show') camera = 'visible'
+        else if (payload.action === 'camera-hide') camera = 'hidden'
+      })
+    }
     let elapsed = 754
     setInterval(() => {
       if (phase === 'recording') elapsed += 0.25
@@ -570,11 +620,16 @@ export function installMock() {
         micMuted: params.has('muted'),
         hasMic: true,
         countdown: phase === 'countdown' ? 3 : null,
+        camera,
       })
     }, 250)
   }
 
-  const label = location.pathname.includes('hud') ? 'hud' : 'main'
+  const label = location.pathname.includes('hud')
+    ? 'hud'
+    : location.pathname.includes('camera')
+      ? 'camera'
+      : 'main'
   mockWindows(label)
   mockIPC((cmd, payload) => handle(cmd, payload), { shouldMockEvents: true })
 
@@ -583,6 +638,12 @@ export function installMock() {
   // mockIPC drops invoke options, and raw-body commands carry their arguments in headers.
   internals.invoke = (cmd: string, args: unknown, options?: { headers?: HeadersInit }) => {
     headers = new Headers(options?.headers)
+    // The mocked event plugin swallows emitTo, so windows talk to each other as plain
+    // emits: each mock page is on its own anyway, but a page still hears itself.
+    if (cmd === 'plugin:event|emit_to') {
+      const { event, payload } = (args ?? {}) as { event?: string; payload?: unknown }
+      return emit(String(event), payload)
+    }
     return invoke(cmd, args, options)
   }
   internals.convertFileSrc = (path: string) => assetUrl(path)

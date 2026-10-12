@@ -36,12 +36,18 @@ tick **Delete the application data** in the uninstaller, it also deletes the two
 `com.butterflylabs.record` folders and the Sarvam key. **Settings > Sarvam > Remove**
 deletes the key at any time.
 
-### Microphone and screen
+### Camera, microphone and screen
 
 The app opens your microphone for a recording, for the level meter on the New
 recording page, and briefly to read the names of your microphones. It records a screen
-or window only after you pick one in the screen picker. Nothing captured leaves your PC
-unless you start a Sarvam job.
+or window only after you pick one in the screen picker.
+
+The camera is opened only while you have it turned on with the New recording page open,
+or while a recording that uses it is running. It is closed, and the camera light goes
+out, as soon as the recording finishes or you leave that page. The camera picture is
+shown in a window on your desktop and recorded as part of the video.
+
+Nothing captured leaves your PC unless you start a Sarvam job.
 
 ### Network connections
 

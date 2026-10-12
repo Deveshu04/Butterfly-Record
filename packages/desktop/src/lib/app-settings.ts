@@ -1,4 +1,26 @@
+import {
+  CAMERA_CORNERS,
+  CAMERA_SHAPES,
+  DEFAULT_CAMERA_SIZE,
+  clampCameraSize,
+  type CameraCorner,
+  type CameraShape,
+} from './camera-layout.ts'
 import { DEFAULT_TTS_SPEAKER, TTS_SPEAKERS, findLanguage } from './languages.ts'
+
+export interface CameraSettings {
+  enabled: boolean
+  /** null = the system's default camera. */
+  deviceId: string | null
+  shape: CameraShape
+  /** Overlay width in logical pixels; the height follows the shape. */
+  size: number
+  mirror: boolean
+  /** Where the camera is drawn in window recordings, which cannot see the overlay. */
+  corner: CameraCorner
+  /** Last top-left of the overlay in physical screen pixels; null = place by corner. */
+  position: { x: number; y: number } | null
+}
 
 export interface AppSettings {
   theme: 'system' | 'light' | 'dark'
@@ -13,6 +35,7 @@ export interface AppSettings {
     countdown: boolean
     /** Minimize the main window while recording. */
     hideWindow: boolean
+    camera: CameraSettings
   }
   sarvam: {
     sttModel: 'saaras:v4' | 'saaras:v3'
@@ -35,6 +58,15 @@ export const DEFAULT_SETTINGS: AppSettings = {
     microphoneId: null,
     countdown: true,
     hideWindow: true,
+    camera: {
+      enabled: false,
+      deviceId: null,
+      shape: 'circle',
+      size: DEFAULT_CAMERA_SIZE,
+      mirror: true,
+      corner: 'bottom-right',
+      position: null,
+    },
   },
   sarvam: {
     sttModel: 'saaras:v4',
@@ -58,6 +90,29 @@ function pick<T>(value: unknown, allowed: readonly T[], fallback: T): T {
 
 function bool(value: unknown, fallback: boolean): boolean {
   return typeof value === 'boolean' ? value : fallback
+}
+
+/** Screen coordinates can be negative on a monitor left of the primary one. */
+function overlayPosition(value: unknown): { x: number; y: number } | null {
+  const point = record(value)
+  const { x, y } = point
+  if (typeof x !== 'number' || typeof y !== 'number') return null
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null
+  return { x: Math.round(x), y: Math.round(y) }
+}
+
+function normalizeCamera(raw: unknown, defaults: CameraSettings): CameraSettings {
+  const camera = record(raw)
+  return {
+    enabled: bool(camera.enabled, defaults.enabled),
+    deviceId:
+      typeof camera.deviceId === 'string' && camera.deviceId.length > 0 ? camera.deviceId : null,
+    shape: pick(camera.shape, CAMERA_SHAPES, defaults.shape),
+    size: clampCameraSize(typeof camera.size === 'number' ? camera.size : defaults.size),
+    mirror: bool(camera.mirror, defaults.mirror),
+    corner: pick(camera.corner, CAMERA_CORNERS, defaults.corner),
+    position: overlayPosition(camera.position),
+  }
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -100,6 +155,7 @@ export function normalizeSettings(raw: unknown): AppSettings {
           : null,
       countdown: bool(recording.countdown, defaults.recording.countdown),
       hideWindow: bool(recording.hideWindow, defaults.recording.hideWindow),
+      camera: normalizeCamera(recording.camera, defaults.recording.camera),
     },
     sarvam: {
       sttModel: pick(
