@@ -6,7 +6,7 @@ import {
   type TranscriptSegment,
 } from '@butterfly-record/core/transcript'
 
-import { interpolateWords, speakerLabel } from './timing.ts'
+import { interpolateWords, speakerNumbering, splitForCaptions } from './timing.ts'
 
 export interface TimedText {
   start: number
@@ -15,20 +15,46 @@ export interface TimedText {
   speaker?: string | null
 }
 
+const round = (seconds: number) => Math.round(seconds * 1000) / 1000
+
+/** Shares a chunk's time between its caption lines by how much of the text each one carries. */
+function toCaptionLines(cue: TimedText): TimedText[] {
+  const seconds = Math.max(0, cue.end - cue.start)
+  const lines = splitForCaptions(cue.text, seconds)
+  if (lines.length <= 1) return [cue]
+
+  const total = lines.reduce((sum, line) => sum + line.length, 0)
+  if (total === 0) return [cue]
+
+  let used = 0
+  return lines.map((text, index) => {
+    const from = used
+    used += text.length
+    return {
+      start: index === 0 ? cue.start : round(cue.start + (seconds * from) / total),
+      end: index === lines.length - 1 ? cue.end : round(cue.start + (seconds * used) / total),
+      text,
+      speaker: cue.speaker ?? null,
+    }
+  })
+}
+
 export function buildTranscript(
   cues: ReadonlyArray<TimedText>,
   meta: { language: string; model: string; duration: number },
 ): Transcript {
+  const label = speakerNumbering()
   const segments: TranscriptSegment[] = cues
     .map((cue) => ({ ...cue, text: cue.text.replace(/\s+/g, ' ').trim() }))
     .filter((cue) => cue.text.length > 0 && cue.end >= cue.start)
     .sort((a, b) => a.start - b.start)
+    .flatMap(toCaptionLines)
     .map((cue) => ({
       start: cue.start,
       end: cue.end,
       text: cue.text,
       words: interpolateWords(cue.text, cue.start, cue.end),
-      speaker: speakerLabel(cue.speaker),
+      speaker: label(cue.speaker),
     }))
 
   return {

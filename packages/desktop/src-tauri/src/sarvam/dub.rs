@@ -1,7 +1,7 @@
 //! Sarvam Dubbing: create, upload, start, follow live-status, then collect every requested export.
 
 use std::path::Path;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -14,6 +14,8 @@ use crate::fsio::ReadTarget;
 use crate::library::paths::extension_of;
 
 const EXPORT_TYPES: &[&str] = &["video", "audio", "srt"];
+/// Before this a job is simply quick; after it, silence looks like a stall.
+const WAIT_NOTICE: Duration = Duration::from_secs(15);
 const AUDIO_EXTENSIONS: &[&str] = &["wav", "mp3", "m4a", "aac", "ogg", "opus", "flac"];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -304,6 +306,9 @@ pub async fn dub(
         if settled.pending.is_empty() || started.elapsed() > ctx.api.timing.export_wait {
             break settled;
         }
+        let total = settled.ready.len() + settled.failed.len() + settled.pending.len();
+        let done = total - settled.pending.len();
+        ctx.report("export", share(done, total), &exporting(done, total));
         tokio::time::sleep(ctx.api.timing.dub_poll).await;
     };
 
@@ -425,10 +430,14 @@ async fn wait_for_job(ctx: &Ctx<'_>, session: &Path, job_id: &str) -> IpcResult<
                     .unwrap_or_else(|| "Sarvam could not dub this video.".into());
                 return Err(IpcError::new(Code::Api, message));
             }
-            "queued" | "not_started" => ctx.report("queued", live.progress, "Waiting for Sarvam"),
+            "queued" | "not_started" => ctx.report(
+                "queued",
+                measurable(live.progress),
+                &waiting(started.elapsed()),
+            ),
             _ => ctx.report(
                 "process",
-                live.progress,
+                measurable(live.progress),
                 live.step.as_deref().unwrap_or("Dubbing"),
             ),
         }
@@ -442,9 +451,61 @@ async fn wait_for_job(ctx: &Ctx<'_>, session: &Path, job_id: &str) -> IpcResult<
     }
 }
 
+/// Sarvam reports 0 % for as long as a job sits queued. A bar pinned at zero reads as a
+/// stall, so nothing measurable is better shown as an indeterminate bar.
+fn measurable(fraction: Option<f64>) -> Option<f64> {
+    fraction.filter(|value| *value > 0.0)
+}
+
+fn share(done: usize, total: usize) -> Option<f64> {
+    (done > 0 && total > 0).then(|| done as f64 / total as f64)
+}
+
+/// The elapsed time is the only honest sign of life while Sarvam reports nothing.
+fn waiting(elapsed: Duration) -> String {
+    if elapsed < WAIT_NOTICE {
+        return "Waiting for Sarvam".to_string();
+    }
+    let seconds = elapsed.as_secs();
+    format!(
+        "Waiting for Sarvam ({}:{:02} so far)",
+        seconds / 60,
+        seconds % 60
+    )
+}
+
+fn exporting(done: usize, total: usize) -> String {
+    if total <= 1 {
+        "Preparing the dubbed files".to_string()
+    } else {
+        format!("Preparing the dubbed files ({done} of {total} ready)")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hides_a_progress_bar_that_cannot_move() {
+        assert_eq!(measurable(Some(0.0)), None);
+        assert_eq!(measurable(None), None);
+        assert_eq!(measurable(Some(0.42)), Some(0.42));
+        assert_eq!(share(0, 3), None);
+        assert_eq!(share(1, 4), Some(0.25));
+        assert_eq!(share(2, 0), None);
+    }
+
+    #[test]
+    fn says_how_long_a_queued_job_has_waited() {
+        assert_eq!(waiting(Duration::from_secs(3)), "Waiting for Sarvam");
+        assert_eq!(
+            waiting(Duration::from_secs(75)),
+            "Waiting for Sarvam (1:15 so far)"
+        );
+        assert_eq!(exporting(0, 1), "Preparing the dubbed files");
+        assert_eq!(exporting(1, 3), "Preparing the dubbed files (1 of 3 ready)");
+    }
 
     fn strings(items: &[&str]) -> Vec<String> {
         items.iter().map(|s| s.to_string()).collect()

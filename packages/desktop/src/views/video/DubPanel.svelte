@@ -22,6 +22,13 @@
 
   type Method = 'sarvam-dubbing' | 'tts'
 
+  /** Two dubs of the same language look identical in the list without this. */
+  const METHOD_LABEL: Record<string, string> = {
+    'sarvam-dubbing': 'voice-preserving',
+    tts: 'text-to-speech voice',
+    export: 'exported',
+  }
+
   let {
     item,
     playing,
@@ -152,7 +159,10 @@
           {@const isPlaying = playing === output.path}
           <li>
             <div class="name">
-              <span>{languageName(output.language)}</span>
+              <span>
+                {languageName(output.language)}
+                <span class="method">{METHOD_LABEL[output.method] ?? output.method}</span>
+              </span>
               <span class="file" title={output.path}>{baseName(output.path)}</span>
             </div>
             <Button
@@ -380,6 +390,11 @@
     flex: 1;
     flex-direction: column;
     min-width: 0;
+  }
+
+  .method {
+    color: var(--fg-muted);
+    font-size: var(--text-sm);
   }
 
   .file {

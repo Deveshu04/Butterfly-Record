@@ -255,12 +255,15 @@ async function spokenLanguage(item: VideoItem): Promise<string> {
   )
 }
 
+/** Subtitles the user translated themselves outrank a dub's own SRT and are never replaced. */
 async function saveSrtAsTranscript(
   id: string,
   name: string,
   language: string,
   duration: number,
 ): Promise<void> {
+  const existing = await readTranscript(id, language).catch(() => null)
+  if (existing && existing.segments.length > 0 && existing.model !== 'sarvam-dubbing') return
   const text = await sidecarReadText(id, name)
   if (!text) return
   const transcript = buildTranscript(parseSrt(text), {

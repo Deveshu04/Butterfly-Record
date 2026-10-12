@@ -2,7 +2,7 @@
   import type { Transcript } from '@butterfly-record/core'
   import { errorMessage } from '../../lib/ipc.ts'
   import { estimateCost, jobs } from '../../lib/jobs.svelte.ts'
-  import { languageName } from '../../lib/languages.ts'
+  import { canonicalLanguage, languageName } from '../../lib/languages.ts'
   import type { VideoItem } from '../../lib/library.svelte.ts'
   import { settings } from '../../lib/settings.svelte.ts'
   import { readTranscript } from '../../lib/transcripts.ts'
@@ -88,6 +88,22 @@
   let diarize = $state(settings.value.sarvam.diarize)
   let speakers = $state<number | null>(null)
 
+  /** A transcript can be redone: an auto-detected language is sometimes the wrong one. */
+  let again = $state(false)
+  const showForm = $derived(!item.hasTranscript || again)
+
+  // A finished run, or a different video, replaces the form with the transcript again.
+  $effect(() => {
+    void item.id
+    void revision
+    again = false
+  })
+
+  function transcribeAgain() {
+    language = canonicalLanguage(transcript?.language) ?? settings.value.sarvam.sttLanguage
+    again = true
+  }
+
   const SPEAKER_OPTIONS = [
     { value: null, label: 'Detect automatically' },
     ...Array.from({ length: 9 }, (_, index) => ({ value: index + 2, label: `${index + 2} speakers` })),
@@ -125,7 +141,7 @@
     </div>
   {:else if !item.hasTranscript && item.status !== 'ready'}
     <NeedsMedia status={item.status} action="Transcription" />
-  {:else if !item.hasTranscript}
+  {:else if showForm}
     {#if sarvamKey.present === false}
       <KeyRequired action="Transcription" />
     {:else}
@@ -137,7 +153,11 @@
         }}
       >
         {#if job && job.state !== 'done'}<JobProgress {job} />{/if}
-        <p class="lead">Turn the speech in this video into a searchable transcript with timestamps.</p>
+        {#if again}
+          <p class="lead">Transcribe this video again. The current transcript is replaced; translations and dubs made from it are kept.</p>
+        {:else}
+          <p class="lead">Turn the speech in this video into a searchable transcript with timestamps.</p>
+        {/if}
 
         <div class="field">
           <label for="{uid}-language">Spoken language</label>
@@ -169,8 +189,11 @@
 
         <div class="submit">
           <Button variant="primary" type="submit" wide disabled={sarvamKey.present === null}>
-            Transcribe
+            {again ? 'Transcribe again' : 'Transcribe'}
           </Button>
+          {#if again}
+            <Button wide onclick={() => (again = false)}>Keep the current transcript</Button>
+          {/if}
           <p class="cost">
             {#if cost}Estimated cost {cost} with Sarvam.{:else}Cost depends on the length of the video.{/if}
             The audio is uploaded to Sarvam for this job only.
@@ -201,6 +224,7 @@
       {#if transcript}<span class="count">{plural(transcript.segments.length, 'line')}</span>{/if}
       {#if sarvamKey.present}
         <Button size="sm" variant="ghost" icon="text" busy={summarizing} onclick={() => summarizeVideo(item, onshowdetails)}>Summarize</Button>
+        <Button size="sm" variant="ghost" icon="refresh" onclick={transcribeAgain}>Transcribe again</Button>
       {/if}
     </div>
     {#if loadError}
@@ -299,8 +323,9 @@
 
   .subbar {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: var(--space-2);
+    gap: var(--space-1) var(--space-2);
     min-height: 28px;
     padding: 0 var(--space-3) var(--space-2) var(--space-4);
     border-bottom: 1px solid var(--hairline);

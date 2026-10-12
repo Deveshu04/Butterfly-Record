@@ -37,15 +37,46 @@ export function splitIntoParts(
   }))
 }
 
-/** Diarization ids are opaque and zero-based ("0", "SPEAKER_00"); people count from one. */
-export function speakerLabel(raw: string | null | undefined): string | null {
-  const id = raw?.trim()
-  if (!id) return null
-  const numbered = /^(?:speaker[\s_-]*)?(\d+)$/i.exec(id)
-  return numbered ? `Speaker ${Number(numbered[1]) + 1}` : id
+/**
+ * Diarization ids are opaque and not consistently based: one model counts from zero, another
+ * from one, and a third skips numbers. Numbering them in the order people first speak is the
+ * only mapping that matches what a viewer sees. Non-numeric ids are already names.
+ */
+export function speakerNumbering(): (raw: string | null | undefined) => string | null {
+  const seen = new Map<string, string>()
+  return (raw) => {
+    const id = raw?.trim()
+    if (!id) return null
+    const numbered = /^(?:speaker[\s_-]*)?(\d+)$/i.exec(id)
+    if (!numbered) return id
+    const key = String(Number(numbered[1]))
+    let label = seen.get(key)
+    if (label === undefined) {
+      label = `Speaker ${seen.size + 1}`
+      seen.set(key, label)
+    }
+    return label
+  }
 }
 
 const SENTENCE_END = /(?<=[.!?।॥。])\s+|\n+/
+
+/** A caption line a viewer can read in one glance. */
+export const MAX_CAPTION_CHARS = 84
+/** Beyond this a line has been on screen too long to still match the speech. */
+export const MAX_CAPTION_SECONDS = 6
+/** Splitting below this would cut phrases into fragments, which reads worse than one long line. */
+const MIN_CAPTION_CHARS = 32
+
+/**
+ * Caption-sized pieces of a timed chunk. Saaras sometimes returns several sentences as one
+ * chunk, which would otherwise sit on the video as a paragraph.
+ */
+export function splitForCaptions(text: string, seconds: number): string[] {
+  const parts = Math.max(1, Math.ceil(Math.max(0, seconds) / MAX_CAPTION_SECONDS))
+  const even = Math.max(MIN_CAPTION_CHARS, Math.ceil(text.length / parts))
+  return splitForTts(text, Math.min(MAX_CAPTION_CHARS, even))
+}
 
 /** Splits text into pieces of at most `max` characters, preferring sentence and word breaks. */
 export function splitForTts(text: string, max: number): string[] {

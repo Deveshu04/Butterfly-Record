@@ -32,6 +32,69 @@ describe('buildTranscript', () => {
     assert.equal(transcript.segments[1]!.words.length, 2)
     assert.equal(transcript.segments[1]!.words[0]!.start, 4)
   })
+
+  it('numbers one-based speaker ids from one', () => {
+    const transcript = buildTranscript(
+      [
+        { start: 0, end: 1, text: 'hello', speaker: '1' },
+        { start: 1, end: 2, text: 'hi', speaker: '2' },
+        { start: 2, end: 3, text: 'again', speaker: '1' },
+      ],
+      meta,
+    )
+    assert.deepEqual(
+      transcript.segments.map((segment) => segment.speaker),
+      ['Speaker 1', 'Speaker 2', 'Speaker 1'],
+    )
+  })
+
+  it('breaks a paragraph-long chunk into caption-sized lines', () => {
+    const text =
+      'The first sentence introduces the demo. The second sentence explains the setup step. ' +
+      'The third sentence shows the result. The fourth sentence closes the walkthrough.'
+    const transcript = buildTranscript([{ start: 0, end: 20.16, text, speaker: '1' }], {
+      ...meta,
+      duration: 20.16,
+    })
+    assert.ok(transcript.segments.length >= 3, 'splits into several lines')
+    for (const segment of transcript.segments) {
+      assert.ok(segment.text.length <= 84, `"${segment.text}" is caption sized`)
+      assert.equal(segment.speaker, 'Speaker 1')
+      assert.ok(segment.end > segment.start)
+    }
+    assert.equal(transcript.segments[0]!.start, 0)
+    assert.equal(transcript.segments.at(-1)!.end, 20.16)
+    for (let index = 1; index < transcript.segments.length; index++) {
+      assert.ok(
+        transcript.segments[index]!.start >= transcript.segments[index - 1]!.end - 1e-6,
+        'lines do not overlap',
+      )
+    }
+    assert.equal(
+      transcript.segments.map((segment) => segment.text).join(' '),
+      text,
+      'no words are lost',
+    )
+  })
+
+  it('leaves a short line that merely lasts a long time alone', () => {
+    const transcript = buildTranscript([{ start: 0, end: 18, text: 'Thanks for watching.' }], {
+      ...meta,
+      duration: 18,
+    })
+    assert.equal(transcript.segments.length, 1)
+    assert.equal(transcript.segments[0]!.end, 18)
+  })
+
+  it('splits a long line with no sentence ends at word breaks', () => {
+    const text = 'word '.repeat(40).trim()
+    const transcript = buildTranscript([{ start: 0, end: 30, text }], { ...meta, duration: 30 })
+    assert.ok(transcript.segments.length >= 2)
+    for (const segment of transcript.segments) {
+      assert.ok(segment.text.length <= 84)
+      assert.doesNotMatch(segment.text, /^\s|\s$/)
+    }
+  })
 })
 
 describe('translateTranscript', () => {

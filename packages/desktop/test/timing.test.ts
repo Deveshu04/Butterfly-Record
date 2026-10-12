@@ -9,7 +9,7 @@ import {
   interpolateWords,
   placeCue,
   planDub,
-  speakerLabel,
+  speakerNumbering,
   splitForTts,
   splitIntoParts,
 } from '../src/lib/timing.ts'
@@ -58,16 +58,37 @@ describe('splitIntoParts', () => {
   })
 })
 
-describe('speakerLabel', () => {
+describe('speakerNumbering', () => {
   it('numbers zero-based ids from one', () => {
-    assert.equal(speakerLabel('0'), 'Speaker 1')
-    assert.equal(speakerLabel('SPEAKER_01'), 'Speaker 2')
+    const label = speakerNumbering()
+    assert.equal(label('0'), 'Speaker 1')
+    assert.equal(label('SPEAKER_01'), 'Speaker 2')
+  })
+
+  it('numbers one-based ids from one too', () => {
+    const label = speakerNumbering()
+    assert.equal(label('1'), 'Speaker 1')
+    assert.equal(label('2'), 'Speaker 2')
+    assert.equal(label('1'), 'Speaker 1')
+  })
+
+  it('counts in the order people first speak', () => {
+    const label = speakerNumbering()
+    assert.equal(label('5'), 'Speaker 1')
+    assert.equal(label('2'), 'Speaker 2')
+    assert.equal(label('5'), 'Speaker 1')
+  })
+
+  it('keeps its own count per transcript', () => {
+    assert.equal(speakerNumbering()('3'), 'Speaker 1')
+    assert.equal(speakerNumbering()('3'), 'Speaker 1')
   })
 
   it('keeps other labels and drops empty ones', () => {
-    assert.equal(speakerLabel('Host'), 'Host')
-    assert.equal(speakerLabel(''), null)
-    assert.equal(speakerLabel(null), null)
+    const label = speakerNumbering()
+    assert.equal(label('Host'), 'Host')
+    assert.equal(label(''), null)
+    assert.equal(label(null), null)
   })
 })
 
