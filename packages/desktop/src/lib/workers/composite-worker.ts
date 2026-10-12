@@ -3,7 +3,9 @@
 // Pacing comes from the screen track itself — one output frame per captured frame, with
 // the captured timestamp kept so the recording stays in sync.
 
-import { cameraRect } from '../camera-layout.ts'
+import { DEFAULT_CAMERA_EFFECTS, effectsActive, needsSegmentation } from '../camera-effects.ts'
+import { cameraRect, type CompositeRect } from '../camera-layout.ts'
+import type { CameraEffect } from '../effects/camera-effect.ts'
 import { coverRect, type CompositeFrame, type CompositeRequest } from './composite-protocol.ts'
 
 interface WorkerScope {
@@ -20,10 +22,18 @@ let frame: CompositeFrame = {
   corner: 'bottom-right',
   mirror: true,
   hidden: false,
+  effects: DEFAULT_CAMERA_EFFECTS,
 }
 let latest: VideoFrame | null = null
+/** Counts camera frames, so the effect runs once per camera frame rather than per screen frame. */
+let cameraSerial = 0
 let stopped = false
 let started = false
+let effect: CameraEffect | null = null
+/** Set while the effect loads; a background the user asked to hide is never drawn meanwhile. */
+let effectLoading = false
+/** What the effect canvas holds: which camera frame, drawn at which size. */
+let drawn = { serial: -1, w: 0, h: 0 }
 
 function settings(message: CompositeFrame): CompositeFrame {
   return {
@@ -33,6 +43,7 @@ function settings(message: CompositeFrame): CompositeFrame {
     corner: message.corner,
     mirror: message.mirror,
     hidden: message.hidden,
+    effects: message.effects,
   }
 }
 
@@ -54,6 +65,7 @@ async function readCamera(stream: ReadableStream<VideoFrame>): Promise<void> {
         return
       }
       latest = value
+      cameraSerial++
     }
   } finally {
     dropCamera()
@@ -61,18 +73,73 @@ async function readCamera(stream: ReadableStream<VideoFrame>): Promise<void> {
   }
 }
 
-function drawCamera(
+async function startEffect(background: ImageBitmap | null): Promise<void> {
+  if (!effectsActive(frame.effects)) {
+    background?.close()
+    return
+  }
+  effectLoading = true
+  let created: CameraEffect | null = null
+  try {
+    const { CameraEffect } = await import('../effects/camera-effect.ts')
+    created = new CameraEffect(new OffscreenCanvas(1, 1))
+    created.setEffects(frame.effects)
+    created.setImage(background)
+    await created.prepare()
+    if (stopped) created.close()
+    else effect = created
+  } catch (error) {
+    created?.close()
+    effectFailed(error)
+  } finally {
+    effectLoading = false
+    background?.close()
+  }
+}
+
+function effectFailed(error: unknown): void {
+  console.warn('[butterfly-record] camera effect unavailable in the recording', error)
+  effect?.close()
+  effect = null
+  scope.postMessage({
+    type: 'effects-failed',
+    message: 'The camera is being recorded without its background effect.',
+  })
+}
+
+/**
+ * The camera with its effect; null to draw the plain frame instead. Until the person has
+ * been found, a background the user asked to hide is not shown at all: 'hide'.
+ */
+function withEffect(camera: VideoFrame, rect: CompositeRect): OffscreenCanvas | 'hide' | null {
+  const hiding = needsSegmentation(frame.effects)
+  if (!effect) return effectLoading && hiding ? 'hide' : null
+  if (drawn.serial !== cameraSerial || drawn.w !== rect.w || drawn.h !== rect.h) {
+    let ok = false
+    try {
+      const view = { width: rect.w, height: rect.h, mirror: frame.mirror }
+      ok = effect.draw(camera, camera.displayWidth, camera.displayHeight, view)
+    } catch (error) {
+      effectFailed(error)
+      return null
+    }
+    if (!ok) {
+      const failure = effect.failure
+      if (!failure) return hiding ? 'hide' : null
+      effectFailed(failure)
+      return null
+    }
+    drawn = { serial: cameraSerial, w: rect.w, h: rect.h }
+  }
+  return effect.canvas as OffscreenCanvas
+}
+
+function drawPlain(
   context: OffscreenCanvasRenderingContext2D,
-  width: number,
-  height: number,
   camera: VideoFrame,
+  rect: CompositeRect,
 ): void {
-  const rect = cameraRect(width, height, frame.shape, frame.size, frame)
   const source = coverRect(camera.displayWidth, camera.displayHeight, rect.w, rect.h)
-  context.save()
-  context.beginPath()
-  context.roundRect(rect.x, rect.y, rect.w, rect.h, rect.radius)
-  context.clip()
   if (frame.mirror) {
     // Flip around the frame's own centre, so the clip keeps its place.
     context.translate(rect.x * 2 + rect.w, 0)
@@ -89,6 +156,24 @@ function drawCamera(
     rect.w,
     rect.h,
   )
+}
+
+function drawCamera(
+  context: OffscreenCanvasRenderingContext2D,
+  width: number,
+  height: number,
+  camera: VideoFrame,
+): void {
+  const rect = cameraRect(width, height, frame.shape, frame.size, frame)
+  const styled = withEffect(camera, rect)
+  if (styled === 'hide') return
+  context.save()
+  context.beginPath()
+  context.roundRect(rect.x, rect.y, rect.w, rect.h, rect.radius)
+  context.clip()
+  // The effect is drawn cropped and mirrored already.
+  if (styled) context.drawImage(styled, rect.x, rect.y, rect.w, rect.h)
+  else drawPlain(context, camera, rect)
   context.restore()
 }
 
@@ -137,6 +222,8 @@ async function compose(
     await reader.cancel().catch(() => {})
     stopped = true
     dropCamera()
+    effect?.close()
+    effect = null
   }
 }
 
@@ -148,11 +235,17 @@ scope.addEventListener('message', (event: MessageEvent<CompositeRequest>) => {
   }
   if (message.type === 'update') {
     frame = settings(message)
+    effect?.setEffects(frame.effects)
+    drawn.serial = -1
     return
   }
-  if (started) return
+  if (started) {
+    message.background?.close()
+    return
+  }
   started = true
   frame = settings(message)
+  void startEffect(message.background)
   void readCamera(message.camera)
   compose(message.screen, message.output).then(
     () => scope.postMessage({ type: 'ended' }),

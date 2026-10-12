@@ -4,6 +4,11 @@
   import { getCurrentWindow, LogicalSize, type PhysicalSize } from '@tauri-apps/api/window'
 
   import {
+    DEFAULT_CAMERA_EFFECTS,
+    normalizeCameraEffects,
+    type CameraEffects,
+  } from '../lib/camera-effects.ts'
+  import {
     aspectOf,
     CAMERA_SIZE_STEP,
     clampCameraSize,
@@ -13,7 +18,8 @@
     overlaySize,
     type CameraShape,
   } from '../lib/camera-layout.ts'
-  import { emitCameraState, onCameraConfig } from '../lib/ipc.ts'
+  import { emitCameraState, onCameraConfig, type CameraEffectState } from '../lib/ipc.ts'
+  import { OverlayEffect } from './overlay-effect.ts'
 
   /** How long to wait for the first `camera-config` before falling back to the default camera. */
   const FIRST_CONFIG_WAIT = 250
@@ -32,6 +38,7 @@
   let deviceId = $state<string | null>(null)
   let shape = $state<CameraShape>('circle')
   let mirror = $state(true)
+  let effects = $state.raw<CameraEffects>(DEFAULT_CAMERA_EFFECTS)
   let recording = $state(false)
   let configured = $state(false)
   /** A real config arrived, as opposed to the wait running out. */
@@ -41,6 +48,16 @@
   let frameWidth = $state(240)
   let frameHeight = $state(240)
   let video: HTMLVideoElement | undefined = $state()
+  let effectCanvas: HTMLCanvasElement | undefined = $state()
+  /** The effect canvas has a frame and covers the video. */
+  let effectShown = $state(false)
+  let effectState: CameraEffectState = { status: 'off', message: null }
+  let overlayEffect: OverlayEffect | null = null
+  /** The last state sent, so a change in the effect alone can be sent again with it. */
+  let reported: { status: 'starting' | 'live' | 'error'; message: string | null } = {
+    status: 'starting',
+    message: null,
+  }
 
   let stream: MediaStream | null = null
   /** Bumped per open so a slow getUserMedia cannot attach a stream that is already stale. */
@@ -68,6 +85,7 @@
       deviceId = config.deviceId
       shape = config.shape
       mirror = config.mirror
+      effects = normalizeCameraEffects(config.effects)
       recording = config.recording
       configured = true
       adopted = true
@@ -91,8 +109,22 @@
       window.removeEventListener('pagehide', stopStream)
       void unlisten.then((stop) => stop()).catch(warn)
       void resized.then((stop) => stop()).catch(warn)
+      overlayEffect?.close()
       stopStream()
     }
+  })
+
+  $effect(() => {
+    if (!video || !effectCanvas) return
+    overlayEffect ??= new OverlayEffect(video, effectCanvas, {
+      showing: (on) => (effectShown = on),
+      state: (state) => {
+        if (state.status === effectState.status && state.message === effectState.message) return
+        effectState = state
+        report(reported.status, reported.message)
+      },
+    })
+    overlayEffect.update(effects, mirror, phase === 'live')
   })
 
   // Only the device may restart the camera: a new shape, mirror or recording flag must not
@@ -128,7 +160,8 @@
   }
 
   function report(status: 'starting' | 'live' | 'error', message: string | null) {
-    emitCameraState({ status, message }).catch(warn)
+    reported = { status, message }
+    emitCameraState({ status, message, effect: effectState }).catch(warn)
   }
 
   /** Hints only, never `exact`: no camera may be excluded by the frame it will be shown in. */
@@ -327,6 +360,7 @@
 <div class="frame" class:recording style="--radius: {radius}; --grip: {gripInset}px">
   <!-- svelte-ignore a11y_media_has_caption -- a live camera preview has nothing to caption -->
   <video bind:this={video} class:mirrored={mirror} autoplay muted playsinline></video>
+  <canvas bind:this={effectCanvas} class="effect" class:shown={effectShown} aria-hidden="true"></canvas>
 
   {#if phase === 'error'}
     <div class="placeholder">
@@ -376,6 +410,19 @@
 
   video.mirrored {
     transform: scaleX(-1);
+  }
+
+  /* Drawn already cropped and mirrored, over the video it takes its frames from. */
+  .effect {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    visibility: hidden;
+  }
+
+  .effect.shown {
+    visibility: visible;
   }
 
   .placeholder {

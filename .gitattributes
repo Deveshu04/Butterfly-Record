@@ -16,3 +16,4 @@
 *.woff2 binary
 *.exe binary
 *.zip binary
+*.tflite binary

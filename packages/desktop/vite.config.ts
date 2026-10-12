@@ -14,6 +14,9 @@ export default defineConfig(({ mode }) => ({
         'The installer also contains the Microsoft Edge WebView2 Runtime bootstrapper, which ' +
           'installs the runtime when Windows does not already have it. Microsoft licenses the ' +
           'runtime under the Microsoft Software License Terms for Microsoft Edge WebView2.',
+        'The camera background effects use the MediaPipe Selfie Segmentation model ' +
+          '(selfie_segmenter.tflite, published by Google), which is included with the app and ' +
+          'licensed under the Apache License 2.0, the same terms as @mediapipe/tasks-vision below.',
       ],
     }),
   ],
@@ -21,7 +24,7 @@ export default defineConfig(({ mode }) => ({
   clearScreen: false,
   // Outside `--mode mock` the IPC stubs must fold to dead code, whatever the environment says.
   define: mode === 'mock' ? {} : { 'import.meta.env.VITE_MOCK': JSON.stringify('') },
-  // Every worker is a module worker; the transcription one loads transformers.js as a chunk.
+  // Module workers, so transformers.js, the camera effect and the segmentation model load on demand.
   worker: { format: 'es' },
   server: {
     // Must match devUrl in tauri.conf.json, and must fail rather than drift.

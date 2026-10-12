@@ -49,7 +49,7 @@ gitignored.
 
 | Variable | Effect |
 |---|---|
-| `SMOKE_CAPTURE=fake` | Record Chromium's generated test pattern and a generated microphone instead; no real audio device is opened. |
+| `SMOKE_CAPTURE=fake` | Record Chromium's generated test pattern and a generated microphone instead; no real audio device is opened. Also turns on the generated camera, checks the overlay, then turns on a background blur from the Record page and checks the overlay draws it over a live picture. |
 | `SMOKE_SCREENSHOTS=<dir>` | Save a screenshot of every view. |
 | `SMOKE_KEEP=1` | Keep the scratch library and settings folders for inspection. |
 

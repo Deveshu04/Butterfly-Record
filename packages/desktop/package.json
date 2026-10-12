@@ -16,6 +16,7 @@
   "dependencies": {
     "@butterfly-record/core": "workspace:*",
     "@butterfly-record/ui": "workspace:*",
+    "@mediapipe/tasks-vision": "0.10.35",
     "@tauri-apps/api": "^2.5.0",
     "mediabunny": "^1.52.2",
     "onnxruntime-web": "1.26.0-dev.20260416-b7804b056c"

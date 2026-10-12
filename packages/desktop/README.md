@@ -21,6 +21,13 @@ covers features, the build and known limitations.
   becomes the same fraction of the recorded frame, and moving it during a recording moves
   it in the video. The recording bar can hide and show it while you record, and it closes
   and releases the camera as soon as you stop or leave the Record page.
+- **Camera background and touch-up.** Blur the background (light or strong), replace it
+  with a picture or a plain color, and turn on a light touch-up that gently brightens a
+  dim picture. You are found in each frame on your PC by the MediaPipe Selfie
+  Segmentation model, which ships with the app; nothing is downloaded or uploaded. A
+  chosen picture is copied into the app's own folder, so moving or deleting the original
+  does not matter. The overlay and window recordings draw the effect the same way, so the
+  video looks like the preview.
 - **Alt+Shift+R** opens New recording from anywhere, or stops a recording in progress;
   the menu of the notification-area icon does the same. Closing the window leaves the
   app running there unless you turn that off in Settings.
@@ -133,7 +140,7 @@ variables exist for it and for debugging:
 | Variable | Effect |
 |---|---|
 | `BUTTERFLY_RECORD_LIBRARY_DIR` | Use this folder as the library instead of the saved one, without saving it. |
-| `BUTTERFLY_RECORD_CONFIG_DIR` | Keep `settings.json`, `library.json` and `imports.json` in this folder instead of `%APPDATA%\com.butterflylabs.record`. |
+| `BUTTERFLY_RECORD_CONFIG_DIR` | Keep `settings.json`, `library.json`, `imports.json` and the camera background picture in this folder instead of `%APPDATA%\com.butterflylabs.record`. |
 | `BUTTERFLY_RECORD_WEBVIEW_ARGS` | Extra WebView2 browser arguments, e.g. `--remote-debugging-port=9222` for DevTools (browser shortcuts such as F12 are turned off). |
 | `BUTTERFLY_RECORD_SARVAM_BASE_URL` | Send Sarvam requests to another server (tests). |
 | `BUTTERFLY_RECORD_TEST_IMPORT` | `;`-separated file paths that **Import video** uses instead of opening the file dialog. Honoured only together with `BUTTERFLY_RECORD_CONFIG_DIR`. |
@@ -157,6 +164,12 @@ variables exist for it and for debugging:
   monitor, because a window capture is never told where the recorded window is on screen.
   If that window covers only part of the screen, the camera lands at the matching fraction
   of the video rather than over the same point of the desktop.
+- Background effects take a moment to start each time the camera opens, while the model
+  loads. Until it has found you, the overlay shows the plain camera, and a window
+  recording leaves the camera out rather than show the background you chose to hide; the
+  countdown usually covers this. The model runs on the CPU in the background, about 10 to
+  20 times a second on a typical laptop, so the edge can trail a fast movement, and people
+  in posters or photos behind you may be kept in the picture.
 - The shortcut and the tray open the recorder but cannot start it by themselves: the
   screen picker needs a click or a key press in the app window.
 - The screen picker is WebView2's own and refers to the app as "tauri.localhost".

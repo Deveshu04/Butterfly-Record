@@ -19,6 +19,7 @@ import { getVersion } from '@tauri-apps/api/app'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 
 import { displayVideoConstraints } from './app-settings.ts'
+import { shownBackground, type CameraEffects } from './camera-effects.ts'
 import { camera, openCameraStream } from './camera.svelte.ts'
 import { compositeSupported, startCameraComposite, type CameraComposite } from './compositor.ts'
 import {
@@ -136,6 +137,18 @@ function describeCapture(track: MediaStreamTrack): { surface: CaptureSurface; la
   const surface = track.getSettings().displaySurface
   if (surface === 'monitor') return { surface: 'display', label: 'Entire screen' }
   return { surface: 'window', label: track.label || 'Window' }
+}
+
+/** The background picture for a composited camera; a missing one draws no background. */
+async function backgroundFor(effects: CameraEffects): Promise<ImageBitmap | null> {
+  if (shownBackground(effects) !== 'image' || !effects.image) return null
+  try {
+    const { loadBackgroundImage } = await import('./effects/background-image.ts')
+    return await loadBackgroundImage(effects.image)
+  } catch (error) {
+    warn('background picture unavailable')(error)
+    return null
+  }
 }
 
 async function restoreMainWindow(): Promise<void> {
@@ -315,6 +328,42 @@ class Recorder {
       this.#hasMic = mic !== null
       this.#micMuted = false
 
+      const cameraTrack = cameraStream?.getVideoTracks()[0] ?? null
+      // Started before the countdown, so a background effect is ready by the first frame.
+      if (cameraMode === 'composited' && cameraTrack && compositeSupported()) {
+        // The overlay is a preview here, kept out of the capture, so where the user has put
+        // it on screen is the only thing that says where it belongs in the video.
+        const anchor = await camera.anchor()
+        const background = await backgroundFor(wanted.effects)
+        try {
+          composite = startCameraComposite({
+            screen: videoTrack,
+            camera: cameraTrack,
+            shape: wanted.shape,
+            size: wanted.size,
+            anchor,
+            corner: wanted.corner,
+            mirror: wanted.mirror,
+            effects: wanted.effects,
+            background,
+            onFailed: (message) => (this.#error = message),
+            onEffectsFailed: (message) => (this.#error = message),
+          })
+          const running = composite
+          cameraWatch = camera.onPlacementChange((moved) => running.setPlacement(moved))
+        } catch (error) {
+          warn('the camera could not be composited')(error)
+        }
+      }
+      if (cameraMode === 'composited' && !composite) {
+        cameraMode = null
+        stopTracks(cameraStream)
+        cameraStream = null
+        await camera.endRecording()
+        this.#error =
+          'The camera could not be drawn into this window recording. It is recording without it.'
+      }
+
       if (recording.hideWindow) {
         await getCurrentWindow().minimize()
         minimized = true
@@ -341,37 +390,6 @@ class Recorder {
       const codec = pickRecordingCodec(mixer !== null)
       const videoBitsPerSecond = bitrateFor({ width, height, frameRate })
       const audioBitsPerSecond = audioBitrateFor(2)
-
-      const cameraTrack = cameraStream?.getVideoTracks()[0] ?? null
-      if (cameraMode === 'composited' && cameraTrack && compositeSupported()) {
-        // The overlay is a preview here, kept out of the capture, so where the user has put
-        // it on screen is the only thing that says where it belongs in the video.
-        const anchor = await camera.anchor()
-        try {
-          composite = startCameraComposite({
-            screen: videoTrack,
-            camera: cameraTrack,
-            shape: wanted.shape,
-            size: wanted.size,
-            anchor,
-            corner: wanted.corner,
-            mirror: wanted.mirror,
-            onFailed: (message) => (this.#error = message),
-          })
-          const running = composite
-          cameraWatch = camera.onPlacementChange((moved) => running.setPlacement(moved))
-        } catch (error) {
-          warn('the camera could not be composited')(error)
-        }
-      }
-      if (cameraMode === 'composited' && !composite) {
-        cameraMode = null
-        stopTracks(cameraStream)
-        cameraStream = null
-        await camera.endRecording()
-        this.#error =
-          'The camera could not be drawn into this window recording. It is recording without it.'
-      }
 
       const id = ulid()
       await sessionCreate(id)

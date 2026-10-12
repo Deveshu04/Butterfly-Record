@@ -19,6 +19,7 @@ import {
   emitCameraConfig,
   errorMessage,
   onCameraState,
+  type CameraEffectState,
   type CameraPlacement,
   type CameraState,
 } from './ipc.ts'
@@ -32,6 +33,7 @@ type PlacementWatcher = (placement: OverlayPlacement) => void
 
 /** Long enough that a drag or a resize saves once, not on every pixel. */
 const SAVE_DELAY_MS = 300
+const EFFECT_OFF: CameraEffectState = { status: 'off', message: null }
 
 function warn(context: string) {
   return (error: unknown) => console.warn(`[butterfly-record] ${context}`, error)
@@ -46,6 +48,7 @@ class CameraOverlay {
   #open = $state(false)
   #status = $state<CameraStatus>('off')
   #error = $state<string | null>(null)
+  #effect = $state<CameraEffectState>(EFFECT_OFF)
   #visible = $state(true)
 
   /** The Record page is showing with the camera turned on. */
@@ -74,6 +77,10 @@ class CameraOverlay {
   }
   get error(): string | null {
     return this.#error
+  }
+  /** The background effect and touch-up as the overlay is drawing them. */
+  get effect(): CameraEffectState {
+    return this.#effect
   }
   get visible(): boolean {
     return this.#visible
@@ -203,6 +210,7 @@ class CameraOverlay {
       shape: camera.shape,
       mirror: camera.mirror,
       recording: this.#recording,
+      effects: { ...camera.effects },
     }).catch(warn('camera settings not sent'))
   }
 
@@ -260,6 +268,7 @@ class CameraOverlay {
     this.#open = false
     this.#status = 'off'
     this.#error = null
+    this.#effect = EFFECT_OFF
     this.#visible = true
     await cameraClose().catch(warn('camera overlay could not be closed'))
     const unlisten = this.#unlistenState
@@ -270,6 +279,7 @@ class CameraOverlay {
   #onState(state: CameraState): void {
     this.#status = state.status
     this.#error = state.status === 'error' ? (state.message ?? 'The camera is unavailable.') : null
+    this.#effect = state.effect ?? EFFECT_OFF
     // The first word from the overlay is proof it is listening; the settings sent while it
     // was still loading went nowhere.
     if (!this.#greet) return

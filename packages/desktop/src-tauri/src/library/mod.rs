@@ -709,7 +709,7 @@ pub async fn open_path(library: State<'_, Library>, path: String) -> IpcResult<(
     Ok(())
 }
 
-fn dialog(app: &AppHandle) -> tauri_plugin_dialog::FileDialogBuilder<tauri::Wry> {
+pub fn dialog(app: &AppHandle) -> tauri_plugin_dialog::FileDialogBuilder<tauri::Wry> {
     let builder = app.dialog().file();
     match app.get_webview_window("main") {
         Some(main) => builder.set_parent(&main),
@@ -717,7 +717,7 @@ fn dialog(app: &AppHandle) -> tauri_plugin_dialog::FileDialogBuilder<tauri::Wry>
     }
 }
 
-fn into_path(path: tauri_plugin_dialog::FilePath) -> IpcResult<PathBuf> {
+pub fn into_path(path: tauri_plugin_dialog::FilePath) -> IpcResult<PathBuf> {
     path.into_path()
         .map_err(|error| IpcError::new(Code::Io, error.to_string()))
 }

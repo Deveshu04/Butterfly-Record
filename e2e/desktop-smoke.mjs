@@ -6,7 +6,7 @@
 // every view while the test runs; SMOKE_KEEP=1 keeps the scratch folders for inspection;
 // SMOKE_CAPTURE=fake swaps the real screen for Chromium's generated test pattern and adds a
 // generated microphone and camera (no real audio or camera device is ever opened), and turns
-// the camera overlay on so it is covered too.
+// the camera overlay on, with a background blur, so it is covered too.
 
 import { chromium } from 'playwright'
 import { execFileSync, spawn } from 'node:child_process'
@@ -88,6 +88,36 @@ function cameraFeed(page) {
       height: Math.round(box?.height ?? 0),
       innerWidth: window.innerWidth,
       innerHeight: window.innerHeight,
+    }
+  })
+}
+
+/** The overlay's effect canvas, sampled down to a few numbers that say whether it shows a picture. */
+function cameraEffect(page) {
+  return page.evaluate(() => {
+    const canvas = document.querySelector('canvas.effect')
+    if (!canvas || canvas.width === 0) return null
+    const probe = document.createElement('canvas')
+    probe.width = 16
+    probe.height = 16
+    const context = probe.getContext('2d')
+    context.drawImage(canvas, 0, 0, 16, 16)
+    const pixels = context.getImageData(0, 0, 16, 16).data
+    let min = 255
+    let max = 0
+    let sum = 0
+    for (let at = 0; at < pixels.length; at += 4) {
+      const luma = (pixels[at] + pixels[at + 1] + pixels[at + 2]) / 3
+      min = Math.min(min, luma)
+      max = Math.max(max, luma)
+      sum += luma
+    }
+    return {
+      shown: canvas.classList.contains('shown'),
+      width: canvas.width,
+      height: canvas.height,
+      contrast: Math.round(max - min),
+      signature: Math.round(sum),
     }
   })
 }
@@ -312,6 +342,23 @@ async function main() {
       check('the overlay is mirrored', feed.mirrored, feed.mirrored)
       await shot(overlay, 'camera-overlay')
       report.camera = { feed }
+
+      // A background effect is drawn over the video, and stays on for the recording below.
+      await mainWindow.getByRole('radio', { name: 'Blur' }).click()
+      const effect = await waitFor('the camera effect to be drawn', 60_000, async () => {
+        const current = await cameraEffect(overlay).catch(() => null)
+        return current?.shown ? current : null
+      })
+      const moved = await waitFor('the camera effect to keep up with the camera', 10_000, async () => {
+        const current = await cameraEffect(overlay).catch(() => null)
+        return current && current.signature !== effect.signature ? current : null
+      }).catch(() => null)
+      check('the overlay draws the background effect over a live picture', effect.contrast > 8 && moved !== null, {
+        effect,
+        moved,
+      })
+      await shot(overlay, 'camera-overlay-blur')
+      report.camera.effect = { effect, moved }
     }
 
     log('[step] clicking Start recording')

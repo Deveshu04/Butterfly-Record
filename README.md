@@ -64,8 +64,10 @@ access; if you decline, the recording has no narration.
 - Your **camera** in a floating window you can put anywhere on any monitor: four frames
   (circle, rounded, wide, tall), resizable by its corner or with Ctrl and the mouse
   wheel, mirrored or not. Wherever you drag it is where it appears in the video, for
-  screen and window recordings alike. The recording bar can hide and show it while you
-  record, and it releases the camera as soon as you are done.
+  screen and window recordings alike. Blur what is behind you (light or strong), replace
+  it with a picture of your own or a plain color, and turn on a light touch-up for dim
+  rooms; finding you in the picture happens on your PC. The recording bar can hide and
+  show it while you record, and it releases the camera as soon as you are done.
 - An optional 3-second **countdown**, and an option to minimize the window while
   recording.
 - A small **floating recording bar** with a timer, pause and resume, microphone mute,

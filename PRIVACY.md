@@ -25,7 +25,7 @@ extension, published by Butterfly Labs at
 |---|---|
 | Recordings, dubbed copies, and captions you save to the library folder | `%USERPROFILE%\Videos\Butterfly Record`, or the folder you choose in Settings |
 | Data for each video: title, description, thumbnail, transcripts and translations, a record of Sarvam jobs not yet collected, and the raw capture while a recording is in progress | A hidden `.butterfly` folder inside that folder |
-| Settings, the chosen library folder, and the locations of files you imported | `%APPDATA%\com.butterflylabs.record` |
+| Settings, the chosen library folder, the locations of files you imported, and a copy of the picture you chose as your camera background | `%APPDATA%\com.butterflylabs.record` |
 | Interface preferences (such as the library sort order and player volume) and a diagnostic log of warnings and errors, limited to three files of 1 MB | `%LOCALAPPDATA%\com.butterflylabs.record` |
 | Speech models downloaded for transcribing on your PC | The app's WebView2 storage inside `%LOCALAPPDATA%\com.butterflylabs.record`; **Settings > Transcription** lists and deletes them |
 | Your Sarvam API key, if you add one | Windows Credential Manager, as `Butterfly Record/sarvam` |
@@ -46,7 +46,8 @@ or window only after you pick one in the screen picker.
 The camera is opened only while you have it turned on with the New recording page open,
 or while a recording that uses it is running. It is closed, and the camera light goes
 out, as soon as the recording finishes or you leave that page. The camera picture is
-shown in a window on your desktop and recorded as part of the video.
+shown in a window on your desktop and recorded as part of the video. Background effects
+and the touch-up are worked out on your PC, with a model that comes with the app.
 
 Nothing captured leaves your PC unless you start a Sarvam job.
 

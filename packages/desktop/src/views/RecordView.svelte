@@ -22,6 +22,7 @@
   import { confirmDialog } from '../components/confirm.svelte.ts'
   import { formatBytes, formatClock } from '../components/format.ts'
   import { toasts } from '../components/toasts.svelte.ts'
+  import CameraEffectSettings from './record/CameraEffectSettings.svelte'
 
   type Recording = AppSettings['recording']
   type Camera = Recording['camera']
@@ -333,6 +334,11 @@
               onchange={(on) => changeCamera((draft) => (draft.mirror = on))}
             />
           </SettingRow>
+          <CameraEffectSettings
+            effects={cam.effects}
+            overlay={camera.effect}
+            onchange={(patch) => changeCamera((draft) => patch(draft.effects))}
+          />
           <SettingRow
             label="Position"
             description="Drag the camera anywhere on your screen. Window recordings put it in the matching spot in the video."

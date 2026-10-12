@@ -1,4 +1,9 @@
 import {
+  DEFAULT_CAMERA_EFFECTS,
+  normalizeCameraEffects,
+  type CameraEffects,
+} from './camera-effects.ts'
+import {
   CAMERA_CORNERS,
   CAMERA_SHAPES,
   DEFAULT_CAMERA_SIZE,
@@ -27,6 +32,7 @@ export interface CameraSettings {
   corner: CameraCorner
   /** Last top-left of the overlay in physical screen pixels; null = place by corner. */
   position: { x: number; y: number } | null
+  effects: CameraEffects
 }
 
 export interface AppSettings {
@@ -79,6 +85,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
       mirror: true,
       corner: 'bottom-right',
       position: null,
+      effects: { ...DEFAULT_CAMERA_EFFECTS },
     },
   },
   sarvam: {
@@ -130,6 +137,7 @@ function normalizeCamera(raw: unknown, defaults: CameraSettings): CameraSettings
     mirror: bool(camera.mirror, defaults.mirror),
     corner: pick(camera.corner, CAMERA_CORNERS, defaults.corner),
     position: overlayPosition(camera.position),
+    effects: normalizeCameraEffects(camera.effects),
   }
 }
 

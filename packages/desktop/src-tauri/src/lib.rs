@@ -1,4 +1,5 @@
 mod app;
+mod backgrounds;
 mod error;
 mod fsio;
 mod keystore;
@@ -14,6 +15,7 @@ use tauri::{Manager, Wry};
 use tauri_plugin_log::RotationStrategy;
 
 use app::Shell;
+use backgrounds::Backgrounds;
 use fsio::Files;
 use library::paths::LIBRARY_FOLDER;
 use library::Library;
@@ -70,6 +72,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     app.manage(Shell::new(settings::close_to_tray(&stored), theme));
     app.manage(library);
     app.manage(settings);
+    app.manage(Backgrounds::new(config_dir.join("backgrounds")));
     app.manage(Files::default());
     app.manage(Recorders::default());
     app.manage(Sarvam::new()?);
@@ -136,6 +139,8 @@ pub fn run() {
             app::camera::camera_set_protected,
             app::camera::camera_reset_position,
             app::camera::camera_anchor,
+            backgrounds::camera_background_pick,
+            backgrounds::camera_background_read,
             app::app_quit,
             keystore::sarvam_key_status,
             keystore::sarvam_key_set,

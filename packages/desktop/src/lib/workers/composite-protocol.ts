@@ -1,6 +1,7 @@
 // Shared by the window-recording compositor and the worker that does the drawing: the
 // messages between them, and the small helpers that belong to neither side alone.
 
+import type { CameraEffects } from '../camera-effects.ts'
 import type { CameraAnchor, CameraCorner, CameraShape } from '../camera-layout.ts'
 
 /** Everything the worker needs to know about how the camera should look. */
@@ -15,6 +16,7 @@ export interface CompositeFrame {
   mirror: boolean
   /** The recording bar's camera toggle: the screen keeps recording without the camera. */
   hidden: boolean
+  effects: CameraEffects
 }
 
 /** What a drag or a resize of the overlay changes about the drawn camera. */
@@ -39,6 +41,8 @@ export interface CompositeStart extends CompositeFrame {
   screen: ReadableStream<VideoFrame>
   camera: ReadableStream<VideoFrame>
   output: WritableStream<VideoFrame>
+  /** The chosen background picture, decoded; the worker takes ownership. */
+  background: ImageBitmap | null
 }
 
 export interface CompositeUpdate extends CompositeFrame {
@@ -47,7 +51,11 @@ export interface CompositeUpdate extends CompositeFrame {
 
 export type CompositeRequest = CompositeStart | CompositeUpdate | { type: 'stop' }
 
-export type CompositeEvent = { type: 'ended' } | { type: 'failed'; message: string }
+export type CompositeEvent =
+  | { type: 'ended' }
+  | { type: 'failed'; message: string }
+  /** The camera goes on being drawn, without its background effect or touch-up. */
+  | { type: 'effects-failed'; message: string }
 
 export interface SourceRect {
   x: number

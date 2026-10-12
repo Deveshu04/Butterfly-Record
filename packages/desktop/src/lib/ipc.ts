@@ -5,6 +5,7 @@ import type { RecordingManifest } from '@butterfly-record/core'
 import { invoke } from '@tauri-apps/api/core'
 import { emitTo, listen, type UnlistenFn } from '@tauri-apps/api/event'
 
+import type { CameraEffects } from './camera-effects.ts'
 import type { CameraAnchor, CameraCorner, CameraShape } from './camera-layout.ts'
 import { isIpcError } from './errors.ts'
 
@@ -217,11 +218,20 @@ export interface CameraConfig {
   mirror: boolean
   /** Hides the hover outline and the resize grip. */
   recording: boolean
+  effects: CameraEffects
+}
+
+/** The background effect and touch-up; the plain camera shows unless the status is 'on'. */
+export interface CameraEffectState {
+  status: 'off' | 'starting' | 'on' | 'failed'
+  /** Why it failed; null otherwise. */
+  message: string | null
 }
 
 export interface CameraState {
   status: 'starting' | 'live' | 'error'
   message: string | null
+  effect: CameraEffectState
 }
 
 export interface HudAction {
@@ -315,6 +325,10 @@ export const cameraResetPosition = (corner: CameraCorner) =>
   call<CameraPlacement>('camera_reset_position', { corner })
 /** Where the overlay sits on its monitor, as fractions; null when it is closed or off-screen. */
 export const cameraAnchor = () => call<CameraAnchor | null>('camera_anchor')
+/** Copies a picture the user picks into the app's own folder; its new name, or null if cancelled. */
+export const cameraBackgroundPick = () => call<string | null>('camera_background_pick')
+export const cameraBackgroundRead = (name: string) =>
+  call<ArrayBuffer>('camera_background_read', { name })
 
 // Settings and app
 

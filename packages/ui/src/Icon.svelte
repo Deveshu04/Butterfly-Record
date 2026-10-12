@@ -56,6 +56,10 @@
     | 'volume-off'
     | 'fullscreen'
     | 'fullscreen-exit'
+    | 'none'
+    | 'blur'
+    | 'image'
+    | 'droplet'
 
   const PATHS: Record<IconName, string> = {
     monitor: '<rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>',
@@ -114,6 +118,10 @@
     'volume-off': '<path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z"/><path d="m16 9.5 5 5M21 9.5l-5 5"/>',
     fullscreen: '<path d="M4 9V5.5A1.5 1.5 0 0 1 5.5 4H9M15 4h3.5A1.5 1.5 0 0 1 20 5.5V9M20 15v3.5a1.5 1.5 0 0 1-1.5 1.5H15M9 20H5.5A1.5 1.5 0 0 1 4 18.5V15"/>',
     'fullscreen-exit': '<path d="M9 4v3.5A1.5 1.5 0 0 1 7.5 9H4M20 9h-3.5A1.5 1.5 0 0 1 15 7.5V4M15 20v-3.5a1.5 1.5 0 0 1 1.5-1.5H20M4 15h3.5A1.5 1.5 0 0 1 9 16.5V20"/>',
+    none: '<circle cx="12" cy="12" r="8.5"/><path d="M6 18 18 6"/>',
+    blur: '<g fill="currentColor" stroke="none"><circle cx="12" cy="12" r="2"/><circle cx="6" cy="12" r="1.4"/><circle cx="18" cy="12" r="1.4"/><circle cx="12" cy="6" r="1.4"/><circle cx="12" cy="18" r="1.4"/><circle cx="6" cy="6" r=".9"/><circle cx="18" cy="6" r=".9"/><circle cx="6" cy="18" r=".9"/><circle cx="18" cy="18" r=".9"/></g>',
+    image: '<rect x="3" y="4.5" width="18" height="15" rx="2.5"/><circle cx="8.5" cy="9.5" r="1.6"/><path d="m3.5 17 5-5 4 4 2.5-2.5 5.5 5"/>',
+    droplet: '<path d="M12 3.5c3.4 4 5.5 7 5.5 9.8a5.5 5.5 0 0 1-11 0c0-2.8 2.1-5.8 5.5-9.8z"/>',
   }
 </script>
 

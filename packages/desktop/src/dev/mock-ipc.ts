@@ -7,7 +7,7 @@ import { emit, listen } from '@tauri-apps/api/event'
 import { mockIPC, mockWindows } from '@tauri-apps/api/mocks'
 
 import { FILLER_LINES, PLANNING_LINES, ROOT, VIDEOS, type MockVideo } from './mock-data.ts'
-import { clipWebm, posterJpeg, silentWav } from './mock-media.ts'
+import { backgroundJpeg, clipWebm, posterJpeg, silentWav } from './mock-media.ts'
 
 type Bytes = Uint8Array
 type Args = Record<string, unknown>
@@ -535,6 +535,13 @@ export function installMock() {
               y: cameraPlacement.y / CAMERA_WORK_AREA.height,
             }
           : null
+      // Every mock page has its own state, so any picture name reads back as the same room.
+      case 'camera_background_pick':
+        return `background-${Date.now()}.jpg`
+      case 'camera_background_read': {
+        if (!/^background-\d+\.jpg$/.test(String(args.name))) fail('not_found', 'The background picture is missing.')
+        return (await backgroundJpeg()).buffer
+      }
 
       case 'sarvam_key_status':
         return { present: keyPresent }

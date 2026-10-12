@@ -3,6 +3,7 @@
 // the captured frames instead: the tracks are turned into frame streams, a worker composes
 // them, and the result is recorded as an ordinary video track.
 
+import type { CameraEffects } from './camera-effects.ts'
 import type { CameraAnchor, CameraCorner, CameraShape } from './camera-layout.ts'
 import {
   samePlacement,
@@ -38,8 +39,13 @@ export interface CompositeOptions {
   /** Where the camera goes while there is no anchor. */
   corner: CameraCorner
   mirror: boolean
+  effects: CameraEffects
+  /** The chosen background picture; handed over to the compositor. */
+  background: ImageBitmap | null
   /** Compositing stopped on its own; the recording carries on without the camera. */
   onFailed?: (message: string) => void
+  /** The effect could not be drawn; the recording carries on with the plain camera. */
+  onEffectsFailed?: (message: string) => void
 }
 
 export interface CameraComposite {
@@ -69,7 +75,10 @@ const UNSUPPORTED = 'This computer cannot draw the camera into a window recordin
 export function startCameraComposite(options: CompositeOptions): CameraComposite {
   const Processor = streams.MediaStreamTrackProcessor
   const Generator = streams.MediaStreamTrackGenerator
-  if (!Processor || !Generator || !compositeSupported()) throw new Error(UNSUPPORTED)
+  if (!Processor || !Generator || !compositeSupported()) {
+    options.background?.close()
+    throw new Error(UNSUPPORTED)
+  }
 
   const screen = new Processor({ track: options.screen })
   const camera = new Processor({ track: options.camera })
@@ -85,6 +94,8 @@ export function startCameraComposite(options: CompositeOptions): CameraComposite
     corner: options.corner,
     mirror: options.mirror,
     hidden: false,
+    // Settings arrive as reactive proxies, which cannot be posted to a worker.
+    effects: { ...options.effects },
   }
 
   let closed = false
@@ -96,6 +107,10 @@ export function startCameraComposite(options: CompositeOptions): CameraComposite
   }
 
   worker.addEventListener('message', (event: MessageEvent<CompositeEvent>) => {
+    if (event.data.type === 'effects-failed') {
+      options.onEffectsFailed?.(event.data.message)
+      return
+    }
     const failure = event.data.type === 'failed' ? event.data.message : null
     finish()
     if (failure) options.onFailed?.(failure)
@@ -110,9 +125,15 @@ export function startCameraComposite(options: CompositeOptions): CameraComposite
     screen: screen.readable,
     camera: camera.readable,
     output: generator.writable,
+    background: options.background,
     ...frame,
   }
-  worker.postMessage(start, [screen.readable, camera.readable, generator.writable])
+  worker.postMessage(start, [
+    screen.readable,
+    camera.readable,
+    generator.writable,
+    ...(options.background ? [options.background] : []),
+  ])
 
   function sendFrame(): void {
     worker.postMessage({ type: 'update', ...frame } satisfies CompositeRequest)

@@ -115,6 +115,37 @@ export async function posterJpeg(scene: Scene): Promise<Uint8Array> {
   return new Uint8Array(await blob.arrayBuffer())
 }
 
+/** A room to put behind the camera: a shelf on the left and a window on the right, so a
+ * picture that is wrongly mirrored is easy to spot. */
+export async function backgroundJpeg(): Promise<Uint8Array> {
+  const [element, context] = canvas()
+  context.fillStyle = '#c9c2b6'
+  context.fillRect(0, 0, WIDTH, HEIGHT)
+  rect(context, 0, 290, WIDTH, 70, '#8a7a66')
+  rect(context, 40, 60, 170, 230, '#6f5843', 4)
+  for (let shelf = 0; shelf < 3; shelf++) {
+    const y = 72 + shelf * 72
+    rect(context, 48, y + 60, 154, 6, '#4f3e2f')
+    for (let book = 0; book < 7; book++) {
+      const colors = ['#3e5c76', '#9c4f3d', '#d8cfb8', '#5d7052', '#2f2f2f']
+      rect(context, 54 + book * 20, y + 8 + (book % 3) * 4, 15, 52 - (book % 3) * 4, colors[(book + shelf) % colors.length]!, 2)
+    }
+  }
+  rect(context, 400, 50, 190, 170, '#f3f1ea', 4)
+  rect(context, 410, 60, 80, 150, '#a9c4d6')
+  rect(context, 500, 60, 80, 150, '#a9c4d6')
+  rect(context, 260, 230, 44, 60, '#7c5a3c', 6)
+  context.fillStyle = '#4f7a4a'
+  for (const [x, y, r] of [[282, 210, 26], [262, 196, 18], [304, 194, 20]] as const) {
+    context.beginPath()
+    context.arc(x, y, r, 0, Math.PI * 2)
+    context.fill()
+  }
+  const blob = await new Promise<Blob | null>((resolve) => element.toBlob(resolve, 'image/jpeg', 0.9))
+  if (!blob) throw new Error('Canvas could not encode a background.')
+  return new Uint8Array(await blob.arrayBuffer())
+}
+
 const FRAME_SECONDS = 4
 const AUDIO_CHUNK_SECONDS = 4
 
