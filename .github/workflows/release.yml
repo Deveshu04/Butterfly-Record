@@ -5,14 +5,51 @@ on:
     tags: ['v*.*.*']
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  release:
-    name: Build and draft the release
-    runs-on: windows-latest
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Check the tag matches the package versions
+        id: version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          node scripts/set-version.mjs --check "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  ci:
+    name: CI
+    needs: version
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    name: Build
+    needs: version
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: pnpm/action-setup@v4
         with:
@@ -23,27 +60,19 @@ jobs:
           node-version: 24
           cache: pnpm
 
-      - name: Check the tag matches the package versions
-        id: version
-        shell: bash
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          node scripts/set-version.mjs --check "$version"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: packages/desktop/src-tauri -> target
+          shared-key: desktop-release
+          save-if: false
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Build and zip the extension
         shell: bash
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
         run: |
           rm -f dist/*.zip
           pnpm zip
@@ -56,27 +85,88 @@ jobs:
           [ "${zips[0]}" = "$target" ] || mv "${zips[0]}" "$target"
 
       # Unsigned build; code signing would plug in here through bundle.windows.signCommand and its secrets.
-      - name: Build the installer and draft the release
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          projectPath: packages/desktop
-          tauriScript: pnpm tauri
-          tagName: ${{ github.ref_name }}
-          releaseName: Butterfly Record ${{ github.ref_name }}
-          releaseDraft: true
-          prerelease: false
-          releaseBody: |
-            Windows app: the installer ending in `_x64-setup.exe`. It installs for the current user and is not code-signed, so Windows SmartScreen may ask for confirmation.
+      - name: Build the installer
+        run: pnpm desktop:build
 
-            Chrome extension: `butterfly-record-extension-${{ steps.version.outputs.version }}.zip`.
-
-            Install steps for both are in the README: ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/README.md
-
-      - name: Attach the extension to the release
+      - name: Collect the release files
         shell: bash
+        run: |
+          installers=(packages/desktop/src-tauri/target/release/bundle/nsis/*_"$VERSION"_x64-setup.exe)
+          if [ "${#installers[@]}" -ne 1 ] || [ ! -f "${installers[0]}" ]; then
+            echo "Expected one installer for $VERSION, found: ${installers[*]}" >&2
+            exit 1
+          fi
+          # GitHub turns spaces in asset names into dots; use that name so SHA256SUMS.txt matches the download.
+          name=$(basename "${installers[0]}")
+          mkdir release
+          cp "${installers[0]}" "release/${name// /.}"
+          cp "dist/butterfly-record-extension-$VERSION.zip" release/
+          ls -l release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-files
+          path: release/
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish
+    needs: [version, ci, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-files
+          path: release
+
+      - name: Write SHA256SUMS.txt
+        working-directory: release
+        run: |
+          sha256sum -- *.exe *.zip > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Write the release notes
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ steps.version.outputs.version }}
-        run: gh release upload "$GITHUB_REF_NAME" "dist/butterfly-record-extension-$VERSION.zip" --clobber --repo "$GITHUB_REPOSITORY"
+          README_URL: ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/README.md#download
+        run: |
+          installer=$(cd release && echo *_x64-setup.exe)
+          sed -e "s|@VERSION@|$VERSION|g" -e "s|@INSTALLER@|$installer|g" -e "s|@README@|$README_URL|g" > notes.md <<'EOF'
+          Install steps for both downloads are in the [README](@README@).
+
+          ### Windows app
+
+          Download **`@INSTALLER@`**, the file ending in `_x64-setup.exe`, and run it. It installs for your Windows account only, without administrator rights, and needs 64-bit Windows 10 or 11.
+
+          The installer is not code-signed, so Windows SmartScreen may show "Windows protected your PC". Choose **More info**, then **Run anyway**.
+
+          ### Chrome extension
+
+          Download **`butterfly-record-extension-@VERSION@.zip`**, extract it to a folder you will keep, open `chrome://extensions`, turn on **Developer mode** and choose **Load unpacked**.
+
+          ### Checksums
+
+          `SHA256SUMS.txt` lists the SHA-256 hash of each file. In PowerShell, `Get-FileHash <file>` prints the hash to compare.
+          EOF
+          cat notes.md
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          flags=()
+          case "${VERSION%%+*}" in *-*) flags+=(--prerelease) ;; esac
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            # A re-run: replace the files and make sure the release is public.
+            gh release upload "$GITHUB_REF_NAME" release/* --clobber
+            gh release edit "$GITHUB_REF_NAME" --draft=false "${flags[@]}"
+          else
+            gh release create "$GITHUB_REF_NAME" release/* --verify-tag \
+              --title "Butterfly Record $GITHUB_REF_NAME" --notes-file notes.md --generate-notes "${flags[@]}"
+          fi

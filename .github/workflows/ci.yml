@@ -4,20 +4,34 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
+  # A fixed prefix, because a called workflow's github.workflow is the caller's name.
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Cancel superseded pull request runs; a started run on main or a tag always finishes.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  ci:
-    name: Check, test and build
+  checks:
+    name: Checks
     runs-on: windows-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: cargo fmt
+        working-directory: packages/desktop/src-tauri
+        run: cargo fmt --check
 
       - uses: pnpm/action-setup@v4
         with:
@@ -28,13 +42,10 @@ jobs:
           node-version: 24
           cache: pnpm
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy, rustfmt
-
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: packages/desktop/src-tauri -> target
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -46,17 +57,14 @@ jobs:
         run: pnpm -r test
 
       - name: Test scripts
-        run: node --test scripts/set-version.test.mjs
+        run: node --test "scripts/*.test.mjs"
 
       - name: Build the extension
         run: pnpm build
 
+      # The Rust build embeds this output, so clippy and the tests need it.
       - name: Build the desktop frontend
         run: pnpm --filter @butterfly-record/desktop vite:build
-
-      - name: cargo fmt
-        working-directory: packages/desktop/src-tauri
-        run: cargo fmt --check
 
       - name: cargo clippy
         working-directory: packages/desktop/src-tauri
@@ -65,3 +73,89 @@ jobs:
       - name: cargo test
         working-directory: packages/desktop/src-tauri
         run: cargo test
+
+  e2e:
+    name: Desktop e2e
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Check WebView2 and the desktop session
+        shell: pwsh
+        run: |
+          $client = 'Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+          function Get-WebView2Version {
+            foreach ($key in "HKLM:\SOFTWARE\WOW6432Node\$client", "HKCU:\SOFTWARE\$client") {
+              $pv = (Get-ItemProperty -Path $key -Name pv -ErrorAction SilentlyContinue).pv
+              if ($pv -and $pv -ne '0.0.0.0') { return $pv }
+            }
+          }
+          $version = Get-WebView2Version
+          if (-not $version) {
+            $setup = Join-Path $env:RUNNER_TEMP 'MicrosoftEdgeWebview2Setup.exe'
+            Invoke-WebRequest 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile $setup
+            Start-Process -FilePath $setup -ArgumentList '/silent', '/install' -Wait
+            $version = Get-WebView2Version
+            if (-not $version) { throw 'The WebView2 Runtime is missing and could not be installed' }
+          }
+          Add-Type -AssemblyName System.Windows.Forms
+          $screen = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $session = (Get-Process -Id $PID).SessionId
+          "WebView2 Runtime $version; session $session; primary screen $($screen.Width)x$($screen.Height)"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Shared with the release build, which compiles the same release profile.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/desktop/src-tauri -> target
+          shared-key: desktop-release
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the app
+        run: pnpm --filter @butterfly-record/desktop tauri build --no-bundle
+
+      - name: Install the e2e harness
+        working-directory: e2e
+        run: npm ci
+
+      # Generated screen, camera and microphone: the runner has no capture devices to rely on.
+      - name: Run the desktop smoke test
+        working-directory: e2e
+        timeout-minutes: 15
+        env:
+          SMOKE_CAPTURE: fake
+        run: npm run smoke:desktop
+
+      - name: Collect the app log
+        if: always()
+        shell: pwsh
+        run: |
+          $logs = Join-Path $env:LOCALAPPDATA 'com.butterflylabs.record\logs'
+          if (Test-Path $logs) { Copy-Item -Path $logs -Destination e2e/app-logs -Recurse }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desktop-e2e
+          path: |
+            e2e/report-desktop-smoke.json
+            e2e/logs-desktop-smoke.txt
+            e2e/failure-desktop-smoke.png
+            e2e/app-logs/
+          retention-days: 14

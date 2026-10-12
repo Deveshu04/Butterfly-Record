@@ -26,13 +26,20 @@ pnpm --filter @butterfly-record/desktop exec vite --mode mock
 
 ## Checks
 
-The CI workflow runs these on Windows for every pull request and every push to `main`.
-Run them yourself first:
+The CI workflow runs two jobs on Windows for every pull request and every push to
+`main`, and both must pass before a change is merged:
+
+- **Checks**: type checks, unit tests, the extension and app interface builds, and the
+  Rust checks.
+- **Desktop e2e**: builds the Windows app and runs the smoke test against it, recording
+  a generated screen, camera and microphone.
+
+Run the checks yourself first:
 
 ```
 pnpm check                                          # typecheck every package
 pnpm test                                           # unit tests: core, desktop and share server
-node --test scripts/set-version.test.mjs            # tests for the version script
+node --test "scripts/*.test.mjs"                    # tests for the repository scripts
 pnpm build                                          # extension into dist/chrome-mv3
 pnpm --filter @butterfly-record/desktop vite:build  # Windows app interface
 ```
@@ -45,11 +52,24 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
+To run the end-to-end job the way CI does, build the app without the installer and run
+the smoke test with generated input (PowerShell, with Butterfly Record not running):
+
+```
+pnpm --filter @butterfly-record/desktop tauri build --no-bundle
+cd e2e
+npm ci
+$env:SMOKE_CAPTURE = 'fake'
+npm run smoke:desktop
+```
+
+When it fails in CI, the run's `desktop-e2e` artifact holds the test report, the console
+and app logs, and a screenshot of the main window.
+
 `pnpm desktop:build` builds the full Windows installer when you need to try it.
 
-The end-to-end tests record for real: a Playwright harness drives Chromium with the
-built extension, and a smoke test drives the built Windows app. They live in a separate
-package; [e2e/README.md](e2e/README.md) explains how to install and run them.
+The e2e package also has a Playwright harness that records with the built extension in
+Chromium; [e2e/README.md](e2e/README.md) describes every script and option.
 
 ## Code style
 
@@ -70,17 +90,29 @@ documents, internal notes or other material readers of the repository cannot see
 
 ## Releases
 
-Releases are built by the repository's GitHub Actions release workflow:
+Releases are built and published by the repository's GitHub Actions release workflow
+when a version tag is pushed:
 
-1. Run `pnpm run version:set <x.y.z>`. It writes the version to every file that records
-   it, including the `package.json` files and the Windows app's `Cargo.toml` and
-   `Cargo.lock`. Commit the change.
-2. Tag the commit `v<x.y.z>` and push the tag. The workflow stops if the tag does not
-   match the version in those files.
-3. The workflow builds `Butterfly Record_<x.y.z>_x64-setup.exe` and
-   `butterfly-record-extension-<x.y.z>.zip` and attaches them to a draft release on the
-   [Releases](https://github.com/butterfly-labs/butterfly-record/releases) page.
-4. Review the draft and publish it.
+1. Run `pnpm version:set <x.y.z>`. It writes the version to every file that records it,
+   including the `package.json` files and the Windows app's `Cargo.toml` and
+   `Cargo.lock`. Commit the change and get it onto `main` like any other change.
+2. Tag that commit and push the tag:
+
+   ```
+   git tag v<x.y.z>
+   git push origin v<x.y.z>
+   ```
+
+3. The workflow stops if the tag does not match the version in those files. Otherwise it
+   runs the CI jobs, builds the installer and the extension, and publishes a release on
+   the [Releases](https://github.com/butterfly-labs/butterfly-record/releases) page with
+   `Butterfly.Record_<x.y.z>_x64-setup.exe` (release files cannot have spaces in their
+   names), `butterfly-record-extension-<x.y.z>.zip` and `SHA256SUMS.txt`. A version
+   with a pre-release suffix, such as `1.2.0-rc.1`, is published as a pre-release.
+
+If any job fails, nothing is published. Re-run the failed jobs if the failure was not
+caused by the code; otherwise fix it on `main`, then move the tag to the fixed commit
+with `git tag -f v<x.y.z>` and `git push -f origin v<x.y.z>`.
 
 ## Licence
 
