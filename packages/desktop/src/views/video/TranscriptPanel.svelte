@@ -1,23 +1,32 @@
 <script lang="ts">
+  import { onMount } from 'svelte'
   import type { Transcript } from '@butterfly-record/core'
   import { errorMessage } from '../../lib/ipc.ts'
   import { estimateCost, jobs } from '../../lib/jobs.svelte.ts'
-  import { canonicalLanguage, languageName } from '../../lib/languages.ts'
+  import { canonicalLanguage, findLanguage, languageName } from '../../lib/languages.ts'
   import type { VideoItem } from '../../lib/library.svelte.ts'
   import { settings } from '../../lib/settings.svelte.ts'
   import { readTranscript } from '../../lib/transcripts.ts'
+  import { gpu, speechModels } from '../../lib/whisper.svelte.ts'
+  import {
+    downloadBytes,
+    transcriptionEngine,
+    whisperBackend,
+    whisperModel,
+    type TranscriptionEngine,
+  } from '../../lib/whisper-models.ts'
   import Button from '../../components/Button.svelte'
   import EmptyState from '../../components/EmptyState.svelte'
   import JobProgress from '../../components/JobProgress.svelte'
   import LanguageSelect from '../../components/LanguageSelect.svelte'
+  import RadioCards from '../../components/RadioCards.svelte'
   import Select from '../../components/Select.svelte'
   import Switch from '../../components/Switch.svelte'
   import TextField from '../../components/TextField.svelte'
   import TranscriptList from '../../components/TranscriptList.svelte'
-  import { plural } from '../../components/format.ts'
+  import { formatBytes, plural } from '../../components/format.ts'
   import { menu } from '../../components/menu.svelte.ts'
   import { sarvamKey } from '../../components/sarvam-key.svelte.ts'
-  import KeyRequired from './KeyRequired.svelte'
   import NeedsMedia from './NeedsMedia.svelte'
   import { captionExportEntries } from './caption-export.ts'
   import { latestJob, runAction, summarizeVideo } from './job-helpers.ts'
@@ -88,6 +97,28 @@
   let diarize = $state(settings.value.sarvam.diarize)
   let speakers = $state<number | null>(null)
 
+  /** null follows the default in Settings until a choice is made here. */
+  let pickedEngine = $state<TranscriptionEngine | null>(null)
+  const engine = $derived(
+    sarvamKey.present
+      ? (pickedEngine ?? transcriptionEngine(settings.value.transcription.engine, true))
+      : 'local',
+  )
+  const model = $derived(whisperModel(settings.value.transcription.model))
+  const backend = $derived(whisperBackend(settings.value.transcription.processor, gpu.info))
+  const local = $derived(engine === 'local')
+  const canTranslate = $derived(!local || model.translates)
+
+  onMount(() => {
+    void gpu.probe()
+    void speechModels.refresh()
+  })
+
+  // Whisper does not know every language Sarvam does.
+  $effect(() => {
+    if (local && language !== 'unknown' && !findLanguage(language)?.whisper) language = 'unknown'
+  })
+
   /** A transcript can be redone: an auto-detected language is sometimes the wrong one. */
   let again = $state(false)
   const showForm = $derived(!item.hasTranscript || again)
@@ -101,6 +132,7 @@
 
   function transcribeAgain() {
     language = canonicalLanguage(transcript?.language) ?? settings.value.sarvam.sttLanguage
+    pickedEngine = null
     again = true
   }
 
@@ -114,10 +146,11 @@
   async function transcribe() {
     await runAction(item.id, 'transcribe', () =>
       jobs.transcribe(item, {
+        engine,
         language,
-        mode: english ? 'translate' : 'transcribe',
-        diarize,
-        numSpeakers: diarize ? speakers : null,
+        mode: english && canTranslate ? 'translate' : 'transcribe',
+        diarize: diarize && !local,
+        numSpeakers: diarize && !local ? speakers : null,
       }),
     )
   }
@@ -142,28 +175,49 @@
   {:else if !item.hasTranscript && item.status !== 'ready'}
     <NeedsMedia status={item.status} action="Transcription" />
   {:else if showForm}
-    {#if sarvamKey.present === false}
-      <KeyRequired action="Transcription" />
-    {:else}
-      <form
-        class="pad form"
-        onsubmit={(event) => {
-          event.preventDefault()
-          void transcribe()
-        }}
-      >
-        {#if job && job.state !== 'done'}<JobProgress {job} />{/if}
-        {#if again}
-          <p class="lead">Transcribe this video again. The current transcript is replaced; translations and dubs made from it are kept.</p>
-        {:else}
-          <p class="lead">Turn the speech in this video into a searchable transcript with timestamps.</p>
-        {/if}
+    <form
+      class="pad form"
+      onsubmit={(event) => {
+        event.preventDefault()
+        void transcribe()
+      }}
+    >
+      {#if job && job.state !== 'done'}<JobProgress {job} />{/if}
+      {#if again}
+        <p class="lead">Transcribe this video again. The current transcript is replaced; translations and dubs made from it are kept.</p>
+      {:else}
+        <p class="lead">Turn the speech in this video into a searchable transcript with timestamps.</p>
+      {/if}
 
-        <div class="field">
-          <label for="{uid}-language">Spoken language</label>
-          <LanguageSelect id="{uid}-language" bind:value={language} capability="stt" allowAuto wide />
-        </div>
+      {#if sarvamKey.present}
+        <fieldset>
+          <legend>Transcribe with</legend>
+          <RadioCards
+            name="{uid}-engine"
+            label="Transcription engine"
+            bind:value={() => engine, (value) => (pickedEngine = value)}
+            options={[
+              {
+                value: 'local',
+                label: 'On this device',
+                description: `Whisper ${model.name}. Free, and the audio stays on this PC.`,
+              },
+              {
+                value: 'sarvam',
+                label: 'Sarvam',
+                description: 'Saaras. Uses your API key and is billed to your Sarvam account.',
+              },
+            ]}
+          />
+        </fieldset>
+      {/if}
 
+      <div class="field">
+        <label for="{uid}-language">Spoken language</label>
+        <LanguageSelect id="{uid}-language" bind:value={language} capability={local ? 'whisper' : 'stt'} allowAuto wide />
+      </div>
+
+      {#if canTranslate}
         <div class="toggle">
           <div class="toggle-text">
             <span id="{uid}-english">Translate to English</span>
@@ -171,7 +225,9 @@
           </div>
           <Switch bind:checked={english} labelledby="{uid}-english" />
         </div>
+      {/if}
 
+      {#if !local}
         <div class="toggle">
           <div class="toggle-text">
             <span id="{uid}-diarize">Speaker labels</span>
@@ -186,21 +242,28 @@
             <Select id="{uid}-speakers" bind:value={speakers} options={SPEAKER_OPTIONS} wide />
           </div>
         {/if}
+      {/if}
 
-        <div class="submit">
-          <Button variant="primary" type="submit" wide disabled={sarvamKey.present === null}>
-            {again ? 'Transcribe again' : 'Transcribe'}
-          </Button>
-          {#if again}
-            <Button wide onclick={() => (again = false)}>Keep the current transcript</Button>
-          {/if}
-          <p class="cost">
+      <div class="submit">
+        <Button variant="primary" type="submit" wide disabled={sarvamKey.present === null}>
+          {again ? 'Transcribe again' : 'Transcribe'}
+        </Button>
+        {#if again}
+          <Button wide onclick={() => (again = false)}>Keep the current transcript</Button>
+        {/if}
+        <p class="cost">
+          {#if local}
+            Runs on this device{backend === 'cpu' ? '' : ' with the GPU'}; the audio never leaves this PC.
+            {#if speechModels.loaded && !speechModels.has(model, backend)}
+              The first run downloads the {model.name} speech model from Hugging Face, about {formatBytes(downloadBytes(model, backend))}.
+            {/if}
+          {:else}
             {#if cost}Estimated cost {cost} with Sarvam.{:else}Cost depends on the length of the video.{/if}
             The audio is uploaded to Sarvam for this job only.
-          </p>
-        </div>
-      </form>
-    {/if}
+          {/if}
+        </p>
+      </div>
+    </form>
   {:else}
     <div class="toolbar">
       <TextField
@@ -224,8 +287,8 @@
       {#if transcript}<span class="count">{plural(transcript.segments.length, 'line')}</span>{/if}
       {#if sarvamKey.present}
         <Button size="sm" variant="ghost" icon="text" busy={summarizing} onclick={() => summarizeVideo(item, onshowdetails)}>Summarize</Button>
-        <Button size="sm" variant="ghost" icon="refresh" onclick={transcribeAgain}>Transcribe again</Button>
       {/if}
+      <Button size="sm" variant="ghost" icon="refresh" onclick={transcribeAgain}>Transcribe again</Button>
     </div>
     {#if loadError}
       <EmptyState icon="alert" tone="danger" compact message={loadError} />
@@ -273,8 +336,23 @@
     gap: 6px;
   }
 
-  .field label {
+  .field label,
+  legend {
     font-weight: 500;
+  }
+
+  fieldset {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: none;
+  }
+
+  legend {
+    padding: 0;
+    margin-bottom: 6px;
   }
 
   .toggle {

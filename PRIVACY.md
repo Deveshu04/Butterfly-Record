@@ -1,6 +1,6 @@
 # Privacy policy
 
-Last updated: 8 October 2026
+Last updated: 12 October 2026
 
 This policy covers the Butterfly Record Windows app and the Butterfly Record Chrome
 extension, published by Butterfly Labs at
@@ -14,8 +14,8 @@ extension, published by Butterfly Labs at
   the apps.
 - The apps make network requests only for features you start yourself: the Sarvam AI
   features of the Windows app (transcription, translation, dubbing and summaries, with
-  your own API key), the speech-model download in the extension, and uploads to a share
-  server you run yourself. Each is described below.
+  your own API key), the speech-model download for transcribing on your computer, and
+  uploads to a share server you run yourself. Each is described below.
 
 ## Windows app
 
@@ -27,6 +27,7 @@ extension, published by Butterfly Labs at
 | Data for each video: title, description, thumbnail, transcripts and translations, a record of Sarvam jobs not yet collected, and the raw capture while a recording is in progress | A hidden `.butterfly` folder inside that folder |
 | Settings, the chosen library folder, and the locations of files you imported | `%APPDATA%\com.butterflylabs.record` |
 | Interface preferences (such as the library sort order and player volume) and a diagnostic log of warnings and errors, limited to three files of 1 MB | `%LOCALAPPDATA%\com.butterflylabs.record` |
+| Speech models downloaded for transcribing on your PC | The app's WebView2 storage inside `%LOCALAPPDATA%\com.butterflylabs.record`; **Settings > Transcription** lists and deletes them |
 | Your Sarvam API key, if you add one | Windows Credential Manager, as `Butterfly Record/sarvam` |
 
 Imported files are not copied or moved; the app remembers where they are.
@@ -51,14 +52,23 @@ Nothing captured leaves your PC unless you start a Sarvam job.
 
 ### Network connections
 
-The app connects to the internet only to use Sarvam AI, and only with an API key you
-have added. Requests go to `api.sarvam.ai` and to the temporary storage links Sarvam
+The app connects to the internet for two things: to download a speech model the first
+time you transcribe on your PC with it, and to use Sarvam AI with an API key you have
+added.
+
+**Speech models.** The app downloads the Whisper model you choose from Hugging Face
+(`huggingface.co` and the download servers under `hf.co` it redirects to). Transcription
+on your PC runs entirely on your PC; the audio is never sent anywhere. Hugging Face
+receives the request as it would from any browser, including your IP address. The model
+is kept, so later transcriptions need no connection.
+
+**Sarvam AI.** Requests go to `api.sarvam.ai` and to the temporary storage links Sarvam
 issues for uploading and downloading job files. Every request carries your API key, and
 Sarvam bills your Sarvam account for the work.
 
 The app contacts Sarvam when you:
 
-- start a transcription, translation, dub or summary;
+- start a transcription with Sarvam, a translation, a dub or a summary;
 - save or test your key (the test sends the word "Hello" to Sarvam's language
   identification service);
 - reopen the app after closing it while a Sarvam job was running, to collect that job's
@@ -68,7 +78,7 @@ What each feature sends:
 
 | Feature | Sent to Sarvam |
 |---|---|
-| Transcribe | The video's audio track, and the language and speaker-label options you choose |
+| Transcribe with Sarvam | The video's audio track, and the language and speaker-label options you choose |
 | Translate | The transcript text |
 | Summarize | The transcript text |
 | Dub with Sarvam Dubbing, **Audio only** (the default) | The video's audio track |

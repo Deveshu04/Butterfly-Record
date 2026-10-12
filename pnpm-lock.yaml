@@ -45,6 +45,9 @@ importers:
       mediabunny:
         specifier: ^1.52.2
         version: 1.52.2
+      onnxruntime-web:
+        specifier: 1.26.0-dev.20260416-b7804b056c
+        version: 1.26.0-dev.20260416-b7804b056c
     devDependencies:
       '@sveltejs/vite-plugin-svelte':
         specifier: ^6.0.0

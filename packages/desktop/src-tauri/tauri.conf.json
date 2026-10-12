@@ -12,7 +12,7 @@
   "app": {
     "windows": [],
     "security": {
-      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost https://asset.localhost blob: data:; media-src 'self' asset: http://asset.localhost https://asset.localhost blob:; connect-src 'self' ipc: http://ipc.localhost https://ipc.localhost asset: http://asset.localhost https://asset.localhost; worker-src 'self' blob:; font-src 'self' data:",
+      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost https://asset.localhost blob: data:; media-src 'self' asset: http://asset.localhost https://asset.localhost blob:; connect-src 'self' ipc: http://ipc.localhost https://ipc.localhost asset: http://asset.localhost https://asset.localhost https://huggingface.co https://*.hf.co; worker-src 'self' blob:; font-src 'self' data:",
       "dangerousDisableAssetCspModification": ["style-src"],
       "assetProtocol": {
         "enable": true,
@@ -33,7 +33,7 @@
     "licenseFile": "../../../LICENSE",
     "category": "Video",
     "shortDescription": "Free screen recorder that saves to your disk",
-    "longDescription": "Butterfly Record records your screen or a window with your microphone and saves each recording as a regular video file in your Videos folder. Recordings never leave your computer unless you choose to. With your own Sarvam API key you can transcribe any video, translate its subtitles, dub it into another Indian language and write a title and summary.",
+    "longDescription": "Butterfly Record records your screen or a window with your microphone and saves each recording as a regular video file in your Videos folder. Recordings never leave your computer unless you choose to. It transcribes any video on your PC, and with your own Sarvam API key it can translate the subtitles, dub the video into another Indian language and write a title and summary.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

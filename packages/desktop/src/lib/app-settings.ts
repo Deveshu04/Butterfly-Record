@@ -7,6 +7,13 @@ import {
   type CameraShape,
 } from './camera-layout.ts'
 import { DEFAULT_TTS_SPEAKER, TTS_SPEAKERS, findLanguage } from './languages.ts'
+import {
+  DEFAULT_WHISPER_MODEL,
+  WHISPER_MODELS,
+  type ProcessorChoice,
+  type TranscriptionEngine,
+  type WhisperModelId,
+} from './whisper-models.ts'
 
 export interface CameraSettings {
   enabled: boolean
@@ -45,6 +52,12 @@ export interface AppSettings {
     translateModel: 'sarvam-translate:v1' | 'mayura:v1'
     ttsSpeaker: string
   }
+  transcription: {
+    /** null until chosen: Sarvam when a key is saved, otherwise this PC. */
+    engine: TranscriptionEngine | null
+    model: WhisperModelId
+    processor: ProcessorChoice
+  }
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -74,6 +87,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
     diarize: false,
     translateModel: 'sarvam-translate:v1',
     ttsSpeaker: DEFAULT_TTS_SPEAKER,
+  },
+  transcription: {
+    engine: null,
+    model: DEFAULT_WHISPER_MODEL,
+    processor: 'auto',
   },
 }
 
@@ -129,6 +147,7 @@ export function normalizeSettings(raw: unknown): AppSettings {
   const root = record(raw)
   const recording = record(root.recording)
   const sarvam = record(root.sarvam)
+  const transcription = record(root.transcription)
   const defaults = DEFAULT_SETTINGS
 
   const sttLanguage =
@@ -174,6 +193,19 @@ export function normalizeSettings(raw: unknown): AppSettings {
         sarvam.ttsSpeaker,
         TTS_SPEAKERS.map((speaker) => speaker.id),
         defaults.sarvam.ttsSpeaker,
+      ),
+    },
+    transcription: {
+      engine: pick(transcription.engine, ['local', 'sarvam', null] as const, null),
+      model: pick(
+        transcription.model,
+        WHISPER_MODELS.map((model) => model.id),
+        defaults.transcription.model,
+      ),
+      processor: pick(
+        transcription.processor,
+        ['auto', 'cpu'] as const,
+        defaults.transcription.processor,
       ),
     },
   }

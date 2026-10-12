@@ -3,8 +3,9 @@
 Butterfly Record is a free, open-source screen recorder that saves every recording to
 your own disk: no account, no upload, no time limit and no watermark. It comes as a
 Windows app and as a Chrome extension, both built on the same recording engine. Sharing
-a link is optional and goes through a server you run yourself. With your own Sarvam AI
-API key, the Windows app can also transcribe, translate, dub and summarize recordings.
+a link is optional and goes through a server you run yourself. The Windows app can also
+transcribe recordings on your PC, and with your own Sarvam AI API key translate, dub and
+summarize them.
 
 ## Download
 
@@ -28,7 +29,7 @@ Download the installer, `Butterfly Record_<version>_x64-setup.exe`, from the
   `.butterfly` folder inside that folder.
 - **Uninstalling** from Windows Settings > Apps keeps your recordings and the
   `.butterfly` folder. If you tick **Delete the application data** in the uninstaller,
-  it also removes your settings and the saved Sarvam key.
+  it also removes your settings, the downloaded speech models and the saved Sarvam key.
 
 ### Chrome extension
 
@@ -88,10 +89,16 @@ access; if you decline, the recording has no narration.
 - A **player** with playback speed (0.5x to 2x), captions and keyboard shortcuts:
   Space or K to play and pause, J and L or the arrow keys to skip 6 seconds, comma and
   period to skip 1 second, F for full screen, M to mute, C for captions.
+- **Transcribe on your PC** with Whisper, with no account or key: English, 14 Indian
+  languages and the other languages Whisper knows, with automatic language detection
+  and, with the Base and Small models, an English-translation mode. It runs on the GPU
+  when there is one and on the CPU otherwise. The speech model downloads once from
+  Hugging Face, between about 140 MB (Base) and 940 MB (Large-v3 Turbo); after that
+  transcription works offline and the audio never leaves your PC. Search the
+  transcript, click a line to jump to it, and export SRT, VTT or plain text.
 - With your own **Sarvam AI** key:
-  - **Transcribe** speech in 22 Indian languages and English, with automatic language
-    detection, an English-translation mode and speaker labels. Search the transcript,
-    click a line to jump to it, and export SRT, VTT or plain text.
+  - **Transcribe** with Sarvam instead, in 22 Indian languages and English, with
+    automatic language detection, an English-translation mode and speaker labels.
   - **Translate** subtitles into another language.
   - **Dub** into other Indian languages or English with Sarvam Dubbing, which keeps each
     speaker's voice, or with a Sarvam text-to-speech voice at lower cost. Dubbed copies are saved
@@ -242,10 +249,10 @@ Three things in the architecture are non-obvious and load-bearing:
 There are no accounts and no telemetry. Recordings stay on your disk unless you upload
 one to a share server you run yourself, or start a Sarvam job in the Windows app with
 your own key, which sends the recording's audio, its transcript text or, if you choose,
-the whole video. The extension's only other network request downloads the
-speech model from Hugging Face the first time you transcribe. The full policy, including
-what each Sarvam feature sends and why the extension needs each permission, is in
-[PRIVACY.md](PRIVACY.md).
+the whole video. The only other network request either app makes downloads a speech
+model from Hugging Face the first time you transcribe on your computer. The full policy,
+including what each Sarvam feature sends and why the extension needs each permission, is
+in [PRIVACY.md](PRIVACY.md).
 
 ## Contributing
 

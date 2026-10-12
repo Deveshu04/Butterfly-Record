@@ -2,6 +2,7 @@
 // posters, and the audio plumbing around transcription and dubbing.
 
 import { probeMedia, remuxToWebm } from '@butterfly-record/core/finalize'
+import { extractAudio } from '@butterfly-record/core/transcribe'
 import {
   ALL_FORMATS,
   AudioSampleSink,
@@ -537,6 +538,22 @@ async function copyOpusParts(
     }
   } finally {
     await packets.return(undefined)
+  }
+}
+
+/** 16 kHz mono samples for on-device transcription; an hour of audio is about 230 MB. */
+export async function extractSpeechSamples(
+  id: string,
+  hooks: JobHooks = {},
+): Promise<{ samples: Float32Array; duration: number }> {
+  const file = await openSource({ kind: 'media', id })
+  try {
+    return await extractAudio(file.source, {
+      ...(hooks.signal ? { signal: hooks.signal } : {}),
+      ...(hooks.onProgress ? { onProgress: hooks.onProgress } : {}),
+    })
+  } finally {
+    await file.close()
   }
 }
 

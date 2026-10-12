@@ -14,6 +14,8 @@ export interface Language {
   tts: boolean
   /** Sarvam Dubbing, as source or target. */
   dub: boolean
+  /** On-device transcription with Whisper. */
+  whisper: boolean
 }
 
 const MAJOR = new Set([
@@ -31,6 +33,25 @@ const MAJOR = new Set([
 ])
 
 const DUB = new Set([...MAJOR, 'as-IN'])
+
+/** The app languages Whisper was trained on. */
+const WHISPER = new Set([
+  'as-IN',
+  'bn-IN',
+  'en-IN',
+  'gu-IN',
+  'hi-IN',
+  'kn-IN',
+  'ml-IN',
+  'mr-IN',
+  'ne-IN',
+  'pa-IN',
+  'sa-IN',
+  'sd-IN',
+  'ta-IN',
+  'te-IN',
+  'ur-IN',
+])
 
 /** [code, English name, native name, ISO 639-2/T for container track metadata] */
 const TABLE: ReadonlyArray<readonly [string, string, string, string]> = [
@@ -68,6 +89,7 @@ export const LANGUAGES: Language[] = TABLE.map(([code, name, native]) => ({
   mayura: MAJOR.has(code),
   tts: MAJOR.has(code),
   dub: DUB.has(code),
+  whisper: WHISPER.has(code),
 }))
 
 const BY_CODE = new Map(LANGUAGES.map((language) => [language.code.toLowerCase(), language]))
@@ -89,6 +111,18 @@ export function languageName(code: string | null): string {
   if (code === 'unknown') return 'Auto-detect'
   if (!code) return 'Unknown language'
   return findLanguage(code)?.name ?? code
+}
+
+/** Whisper's code for an app language, e.g. 'hi' for 'hi-IN'; null when Whisper lacks it. */
+export function whisperCode(code: string | null | undefined): string | null {
+  const language = findLanguage(code)
+  return language?.whisper ? language.code.split('-')[0]! : null
+}
+
+/** The app language for a code Whisper reported; null for languages outside the app's list. */
+export function fromWhisperCode(code: string | null | undefined): string | null {
+  const language = code && /^[a-z]{2,3}$/.test(code) ? findLanguage(code) : undefined
+  return language?.whisper ? language.code : null
 }
 
 export function iso639(code: string): string | undefined {

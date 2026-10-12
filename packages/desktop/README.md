@@ -1,7 +1,8 @@
 # Butterfly Record for Windows
 
 A free screen recorder that saves every recording as a regular video file on your PC.
-Nothing leaves your computer unless you start a Sarvam job with your own API key.
+Nothing leaves your computer unless you start a Sarvam job with your own API key, and
+transcription can run entirely on the PC.
 Installation is covered in the [root README](../../README.md#windows-app); this file
 covers features, the build and known limitations.
 
@@ -37,7 +38,10 @@ covers features, the build and known limitations.
 - **Player** with playback speed (0.5x to 2x), captions in any transcript language, a
   switch between the original and dubbed audio, and keyboard shortcuts (Space or K, J
   and L, the arrow keys, comma and period, F, M, C), listed in the player.
-- **Transcribe** with Sarvam Saaras: 22 Indian languages and English, automatic
+- **Transcribe** on this PC with Whisper, or with Sarvam Saaras and your API key; each
+  run can use either. On the PC: English, 14 Indian languages and the other languages
+  Whisper knows, automatic language detection, and an English-translation mode with the
+  Base and Small models. With Sarvam: 22 Indian languages and English, automatic
   language detection, an English-translation mode and speaker labels. Search the
   transcript, click a line to jump to it, and copy it or save it as SRT, VTT or plain
   text.
@@ -47,11 +51,45 @@ covers features, the build and known limitations.
   next to the original.
 - **Summarize** a transcript into a title and description.
 
+## Transcription on this PC
+
+Whisper runs inside the app through transformers.js and ONNX Runtime Web, in a background
+worker so the window stays responsive. Without a Sarvam key it is the engine every
+transcription uses, with nothing to set up. With a key, **Settings > Transcription >
+Default engine** decides which engine the Transcribe panel starts with, and the panel can
+switch for a single run.
+
+| Model | Download on a GPU / on the CPU | Notes |
+|---|---|---|
+| Base | 138 MB / 143 MB | Fastest, and weakest outside English |
+| Small (default) | 288 MB / 313 MB | |
+| Large-v3 Turbo | 727 MB / 936 MB | Most accurate; needs a GPU to be practical; cannot translate into English |
+
+- **GPU or CPU.** With **Processor** on **Automatic**, the model runs on the GPU through
+  WebGPU whenever WebView2 finds a hardware adapter (Settings shows which one), with 4-bit
+  weights. Otherwise, or with **CPU only**, it runs in WebAssembly with an 8-bit encoder.
+  If the GPU cannot load the model, the job carries on on the CPU.
+- **Downloaded once.** The first transcription with a model downloads it from Hugging
+  Face (`huggingface.co` and the download servers under `hf.co` it redirects to) into the
+  app's WebView2 storage in `%LOCALAPPDATA%\com.butterflylabs.record`. After that no
+  connection is needed. **Settings > Transcription > Downloaded models** lists the models
+  and deletes them. The ONNX Runtime WebAssembly binary ships with the app.
+- **Long recordings** are decoded to 16 kHz mono, about 230 MB of memory per hour, and
+  transcribed in windows of up to 30 seconds cut at pauses. Silent stretches are skipped,
+  and a window where Whisper starts repeating itself is decoded again. Cancel stops the
+  job at once.
+- **Language.** Whisper detects the language from the first speech in the recording, or
+  uses the one you choose. Choosing it skips a step and is more reliable for short clips
+  and for recordings that open with music. Odia, Bodo, Dogri, Kashmiri, Konkani,
+  Maithili, Manipuri and Santali are not offered, because Whisper was not trained on them.
+- Transcripts are saved in the same format as Sarvam's, with the Whisper model id as the
+  model, so captions, translation, dubbing and summaries work on them the same way.
+
 ## Sarvam API key
 
-Transcription, translation, dubbing and summaries run on [Sarvam AI](https://www.sarvam.ai)
-and are billed to your own Sarvam account. The Transcribe, Translate and Dub panels show
-an estimated cost before you start.
+Translation, dubbing, summaries and, when you choose it, transcription run on
+[Sarvam AI](https://www.sarvam.ai) and are billed to your own Sarvam account. The
+Transcribe, Translate and Dub panels show an estimated cost before you start.
 
 1. Create a key at [dashboard.sarvam.ai](https://dashboard.sarvam.ai).
 2. In the app, open **Settings > Sarvam**, paste the key and choose **Save**. The key is
@@ -127,6 +165,12 @@ variables exist for it and for debugging:
 - Window captures can drop to a low frame rate on some WebView2 versions.
 - Imported files play and transcribe only if WebView2 can decode their codecs (HEVC
   needs the HEVC Video Extensions from the Microsoft Store).
+- Transcription on the CPU uses a single core: WebAssembly threads need a cross-origin
+  isolated page, which the app's pages are not. Small is then slower than real time on
+  most PCs, and Large-v3 Turbo is much slower still. Integrated graphics can run the
+  larger models slower than real time too.
+- Transcription on this PC has no speaker labels, and Large-v3 Turbo has no
+  English-translation mode.
 - Dubbing an H.264 video produces an MP4 when Windows provides an AAC encoder, otherwise
   an MKV. Text-to-speech dubs are limited to about 12 hours of media.
 - There is no link sharing yet; the [share server](../share-server/README.md) works

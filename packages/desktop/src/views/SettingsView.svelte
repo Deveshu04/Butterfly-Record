@@ -9,7 +9,6 @@
   import { settings, type AppSettings } from '../lib/settings.svelte.ts'
   import Button from '../components/Button.svelte'
   import Dialog from '../components/Dialog.svelte'
-  import LanguageSelect from '../components/LanguageSelect.svelte'
   import Select from '../components/Select.svelte'
   import SettingGroup from '../components/SettingGroup.svelte'
   import SettingRow from '../components/SettingRow.svelte'
@@ -20,6 +19,7 @@
   import { baseName, formatBytes } from '../components/format.ts'
   import { sarvamKey } from '../components/sarvam-key.svelte.ts'
   import { toasts } from '../components/toasts.svelte.ts'
+  import TranscriptionSettings from './settings/TranscriptionSettings.svelte'
 
   let { section }: { section: string | null } = $props()
 
@@ -109,7 +109,7 @@
   async function removeKey() {
     const confirmed = await confirmDialog.ask({
       title: 'Remove the Sarvam key?',
-      message: 'Transcription, translation and dubbing stop working until you add a key again.',
+      message: 'Translation, dubbing, summaries and transcription on Sarvam stop working until you add a key again. Transcription on this device keeps working.',
       confirmLabel: 'Remove key',
       danger: true,
     })
@@ -332,10 +332,12 @@
       </SettingRow>
     </SettingGroup>
 
+    <TranscriptionSettings />
+
     <SettingGroup
       title="Sarvam"
       id="settings-sarvam"
-      description="Transcription, translation and dubbing run on Sarvam with your own API key. Audio is sent to Sarvam only when you start a job. The key is stored in Windows Credential Manager."
+      description="Translation, dubbing, summaries and transcription on Sarvam run with your own API key. Audio is sent to Sarvam only when you start a job. The key is stored in Windows Credential Manager."
     >
       <SettingRow label="API key" stacked>
         <form class="key-form" onsubmit={saveKey}>
@@ -366,15 +368,6 @@
             {/if}
           </p>
         {/snippet}
-      </SettingRow>
-      <SettingRow label="Spoken language" description="The default for new transcriptions." for="{uid}-stt-language">
-        <LanguageSelect
-          id="{uid}-stt-language"
-          value={value.sarvam.sttLanguage}
-          capability="stt"
-          allowAuto
-          onchange={(code) => change((draft) => (draft.sarvam.sttLanguage = code))}
-        />
       </SettingRow>
       <SettingRow label="Transcription model" for="{uid}-stt-model">
         <Select

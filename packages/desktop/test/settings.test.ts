@@ -43,6 +43,29 @@ describe('normalizeSettings', () => {
     )
   })
 
+  it('reads a file from before on-device transcription as undecided', () => {
+    const settings = normalizeSettings({ theme: 'light', sarvam: { sttModel: 'saaras:v3' } })
+    assert.deepEqual(settings.transcription, { engine: null, model: 'small', processor: 'auto' })
+    assert.equal(settings.sarvam.sttModel, 'saaras:v3')
+  })
+
+  it('keeps transcription choices and drops unknown ones', () => {
+    assert.deepEqual(
+      normalizeSettings({
+        transcription: { engine: 'local', model: 'large-v3-turbo', processor: 'cpu' },
+      }).transcription,
+      { engine: 'local', model: 'large-v3-turbo', processor: 'cpu' },
+    )
+    assert.deepEqual(
+      normalizeSettings({
+        transcription: { engine: 'cloud', model: 'whisper-medium', processor: 'npu' },
+      }).transcription,
+      DEFAULT_SETTINGS.transcription,
+    )
+    assert.equal(normalizeSettings({ transcription: { engine: 'sarvam' } }).transcription.engine, 'sarvam')
+    assert.equal(normalizeSettings({ transcription: 'local' }).transcription.engine, null)
+  })
+
   it('does not share nested objects with the defaults', () => {
     const settings = normalizeSettings({})
     settings.recording.countdown = !settings.recording.countdown

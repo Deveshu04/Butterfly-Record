@@ -3,7 +3,7 @@
   import { Icon } from '@butterfly-record/ui'
   import { LANGUAGES, type Language } from '../lib/languages.ts'
 
-  type Capability = 'stt' | 'translate' | 'mayura' | 'tts' | 'dub'
+  type Capability = 'stt' | 'translate' | 'mayura' | 'tts' | 'dub' | 'whisper'
 
   let {
     value = $bindable(),
@@ -18,7 +18,7 @@
     wide = false,
   }: {
     value: string | null
-    /** Only languages the chosen Sarvam service supports. */
+    /** Only languages the chosen service supports. */
     capability?: Capability | null
     /** Adds "Auto-detect" (code 'unknown') at the top. */
     allowAuto?: boolean
@@ -41,6 +41,7 @@
     mayura: false,
     tts: false,
     dub: false,
+    whisper: true,
   }
 
   let open = $state(false)

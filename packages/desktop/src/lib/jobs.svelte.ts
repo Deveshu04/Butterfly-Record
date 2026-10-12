@@ -1,5 +1,6 @@
 // Sarvam workflows: transcribe, translate, dub (Sarvam Dubbing or Bulbul voice) and
-// summarize. Every run is a visible job; failures land on the job, never as a rejection.
+// summarize, plus transcription on this PC. Every run is a visible job; failures land on
+// the job, never as a rejection.
 
 import type { Transcript } from '@butterfly-record/core'
 import { parseSrt } from '@butterfly-record/core/transcript'
@@ -33,11 +34,19 @@ import {
   type JobContext,
   type JobKind,
 } from './job-state.svelte.ts'
-import { canonicalLanguage, findLanguage, iso639, languageName } from './languages.ts'
+import {
+  canonicalLanguage,
+  findLanguage,
+  fromWhisperCode,
+  iso639,
+  languageName,
+  whisperCode,
+} from './languages.ts'
 import { library, type VideoItem } from './library.svelte.ts'
 import { addOutput, readManifest } from './manifests.ts'
 import {
   extractDubUploadAudio,
+  extractSpeechSamples,
   extractSttAudio,
   muxDub,
   probeFile,
@@ -48,10 +57,13 @@ import { settings } from './settings.svelte.ts'
 import { readTranscript, writeTranscript } from './transcripts.ts'
 import { buildTranscript, transcriptForSummary, translateTranscript } from './transcript-data.ts'
 import { cleanTitle, dubBaseName, fileExtension, isDefaultTitle } from './titles.ts'
+import { runWhisper } from './whisper.svelte.ts'
+import { whisperModel, whisperModelLabel, type TranscriptionEngine } from './whisper-models.ts'
 
 export { estimateCost, type Job, type JobKind }
 
 export interface TranscribeOptions {
+  engine: TranscriptionEngine
   /** 'unknown' = auto-detect. */
   language: string
   /** 'translate' produces an English transcript. */
@@ -148,6 +160,44 @@ async function runTranscription(request: SttRequest): Promise<void> {
   await library.refresh()
 }
 
+async function transcribeOnDevice(
+  item: VideoItem,
+  options: TranscribeOptions,
+  job: JobContext,
+): Promise<void> {
+  const message = 'Reading the audio'
+  job.progress('extracting', message, 0)
+  const { samples, duration } = await extractSpeechSamples(
+    item.id,
+    hooksFor(job, 'extracting', message),
+  )
+  const { transcription } = settings.value
+  const model = whisperModel(transcription.model)
+  const task = options.mode === 'translate' && model.translates ? 'translate' : 'transcribe'
+  const result = await runWhisper(
+    {
+      samples,
+      model,
+      processor: transcription.processor,
+      language: whisperCode(options.language),
+      task,
+    },
+    job,
+  )
+  const language =
+    task === 'translate'
+      ? 'en-IN'
+      : (fromWhisperCode(result.language) ??
+        (options.language !== 'unknown' ? options.language : 'unknown'))
+  const transcript = buildTranscript(result.cues, {
+    language,
+    model: whisperModelLabel(model, task),
+    duration: duration || item.duration || (result.cues.at(-1)?.end ?? 0),
+  })
+  await writeTranscript(item.id, transcript)
+  await library.refresh()
+}
+
 function transcribe(item: VideoItem, options: TranscribeOptions): Promise<void> {
   const outputLanguage =
     options.mode === 'translate'
@@ -158,6 +208,7 @@ function transcribe(item: VideoItem, options: TranscribeOptions): Promise<void> 
   return quiet(
     runJob('transcribe', item.id, outputLanguage, async (job) => {
       requireMedia(item)
+      if (options.engine === 'local') return transcribeOnDevice(item, options, job)
       const message = 'Preparing the audio'
       job.progress('extracting', message, 0)
       const audio = await extractSttAudio(item.id, hooksFor(job, 'extracting', message))

@@ -21,6 +21,8 @@ export default defineConfig(({ mode }) => ({
   clearScreen: false,
   // Outside `--mode mock` the IPC stubs must fold to dead code, whatever the environment says.
   define: mode === 'mock' ? {} : { 'import.meta.env.VITE_MOCK': JSON.stringify('') },
+  // Every worker is a module worker; the transcription one loads transformers.js as a chunk.
+  worker: { format: 'es' },
   server: {
     // Must match devUrl in tauri.conf.json, and must fail rather than drift.
     port: 1420,

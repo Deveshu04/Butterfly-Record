@@ -101,7 +101,7 @@
       <a
         class="foot-item"
         href={href.settings('sarvam')}
-        title={sarvamKey.present ? 'Sarvam key saved — open settings' : 'Add a Sarvam API key to transcribe, translate and dub'}
+        title={sarvamKey.present ? 'Sarvam key saved — open settings' : 'Add a Sarvam API key to translate and dub'}
       >
         <span class="status" class:ok={sarvamKey.present} aria-hidden="true"><Icon name="key" size={16} /></span>
         <span class="label">{sarvamKey.present ? 'Sarvam connected' : 'Add Sarvam key'}</span>

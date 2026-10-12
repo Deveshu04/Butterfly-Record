@@ -6,8 +6,10 @@ import {
   TTS_SPEAKERS,
   canonicalLanguage,
   findLanguage,
+  fromWhisperCode,
   iso639,
   languageName,
+  whisperCode,
 } from '../src/lib/languages.ts'
 
 describe('LANGUAGES', () => {
@@ -18,13 +20,14 @@ describe('LANGUAGES', () => {
   })
 
   it('has the documented capability counts', () => {
-    const count = (flag: 'stt' | 'translate' | 'mayura' | 'tts' | 'dub') =>
+    const count = (flag: 'stt' | 'translate' | 'mayura' | 'tts' | 'dub' | 'whisper') =>
       LANGUAGES.filter((language) => language[flag]).length
     assert.equal(count('stt'), 23)
     assert.equal(count('translate'), 23)
     assert.equal(count('mayura'), 11)
     assert.equal(count('tts'), 11)
     assert.equal(count('dub'), 12)
+    assert.equal(count('whisper'), 15)
   })
 
   it('dubs Assamese but has no Bulbul voice for it', () => {
@@ -65,6 +68,39 @@ describe('languageName', () => {
   it('falls back to the code itself', () => {
     assert.equal(languageName('xx-IN'), 'xx-IN')
     assert.equal(languageName(null), 'Unknown language')
+  })
+})
+
+describe('Whisper codes', () => {
+  it('maps the languages Whisper knows to its two-letter codes', () => {
+    assert.equal(whisperCode('hi-IN'), 'hi')
+    assert.equal(whisperCode('en-IN'), 'en')
+    assert.equal(whisperCode('as-IN'), 'as')
+    assert.equal(whisperCode('ta'), 'ta')
+  })
+
+  it('has no code for the languages Whisper was not trained on', () => {
+    for (const code of ['od-IN', 'or-IN', 'kok-IN', 'mai-IN', 'brx-IN', 'doi-IN', 'ks-IN', 'mni-IN', 'sat-IN']) {
+      assert.equal(whisperCode(code), null, code)
+    }
+    assert.equal(whisperCode('unknown'), null)
+    assert.equal(whisperCode(null), null)
+  })
+
+  it('reads detected languages back into app codes', () => {
+    assert.equal(fromWhisperCode('bn'), 'bn-IN')
+    assert.equal(fromWhisperCode('ur'), 'ur-IN')
+    for (const language of LANGUAGES.filter((entry) => entry.whisper)) {
+      assert.equal(fromWhisperCode(whisperCode(language.code)), language.code)
+    }
+  })
+
+  it('returns nothing for languages outside the app', () => {
+    assert.equal(fromWhisperCode('fr'), null)
+    assert.equal(fromWhisperCode('jw'), null)
+    assert.equal(fromWhisperCode('or'), null)
+    assert.equal(fromWhisperCode('hi-IN'), null)
+    assert.equal(fromWhisperCode(null), null)
   })
 })
 
