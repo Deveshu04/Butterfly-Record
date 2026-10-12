@@ -1,7 +1,7 @@
 # Contributing
 
 Bug reports, questions and pull requests are welcome on
-[GitHub](https://github.com/butterfly-labs/butterfly-record/issues). For anything
+[GitHub](https://github.com/Deveshu04/Butterfly-Record/issues). For anything
 larger than a small fix, open an issue first so the approach can be agreed before you
 spend time on it.
 
@@ -105,7 +105,7 @@ when a version tag is pushed:
 
 3. The workflow stops if the tag does not match the version in those files. Otherwise it
    runs the CI jobs, builds the installer and the extension, and publishes a release on
-   the [Releases](https://github.com/butterfly-labs/butterfly-record/releases) page with
+   the [Releases](https://github.com/Deveshu04/Butterfly-Record/releases) page with
    `Butterfly.Record_<x.y.z>_x64-setup.exe` (release files cannot have spaces in their
    names), `butterfly-record-extension-<x.y.z>.zip` and `SHA256SUMS.txt`. A version
    with a pre-release suffix, such as `1.2.0-rc.1`, is published as a pre-release.

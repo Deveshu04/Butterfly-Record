@@ -28,7 +28,7 @@
     "targets": ["nsis"],
     "publisher": "Butterfly Labs",
     "copyright": "Copyright (c) 2026 Butterfly Labs",
-    "homepage": "https://github.com/butterfly-labs/butterfly-record",
+    "homepage": "https://github.com/Deveshu04/Butterfly-Record",
     "license": "MIT",
     "licenseFile": "../../../LICENSE",
     "category": "Video",

@@ -4,7 +4,7 @@ Last updated: 12 October 2026
 
 This policy covers the Butterfly Record Windows app and the Butterfly Record Chrome
 extension, published by Butterfly Labs at
-<https://github.com/butterfly-labs/butterfly-record>.
+<https://github.com/Deveshu04/Butterfly-Record>.
 
 ## Summary
 
@@ -170,4 +170,4 @@ available. The date at the top shows the latest change.
 ## Contact
 
 Questions about privacy: open an issue at
-<https://github.com/butterfly-labs/butterfly-record/issues>.
+<https://github.com/Deveshu04/Butterfly-Record/issues>.

@@ -29,7 +29,7 @@ export default defineConfig({
     short_name: 'Butterfly',
     description:
       'Free screen recording that stays on your machine. Record your screen, camera and voice, edit, and share — no account, no upload, no time limit.',
-    homepage_url: 'https://github.com/butterfly-labs/butterfly-record',
+    homepage_url: 'https://github.com/Deveshu04/Butterfly-Record',
 
     icons: {
       16: 'icons/16.png',

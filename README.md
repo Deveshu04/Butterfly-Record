@@ -12,7 +12,7 @@ summarize them.
 ### Windows app
 
 Download the installer, `Butterfly Record_<version>_x64-setup.exe`, from the
-[latest release](https://github.com/butterfly-labs/butterfly-record/releases/latest)
+[latest release](https://github.com/Deveshu04/Butterfly-Record/releases/latest)
 (GitHub lists it with a dot in place of the space) and run it. It needs 64-bit Windows
 10 or 11.
 
@@ -36,7 +36,7 @@ Download the installer, `Butterfly Record_<version>_x64-setup.exe`, from the
 The extension is not on the Chrome Web Store yet. Until it is, load it unpacked:
 
 1. Download `butterfly-record-extension-<version>.zip` from the
-   [latest release](https://github.com/butterfly-labs/butterfly-record/releases/latest)
+   [latest release](https://github.com/Deveshu04/Butterfly-Record/releases/latest)
    and extract it to a folder you will keep, or build it from source (see
    [Building from source](#building-from-source)).
 2. Open `chrome://extensions` and turn on **Developer mode**.
@@ -260,7 +260,7 @@ in [PRIVACY.md](PRIVACY.md).
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, checks and how releases are made.
 Questions and bug reports go to
-[GitHub issues](https://github.com/butterfly-labs/butterfly-record/issues).
+[GitHub issues](https://github.com/Deveshu04/Butterfly-Record/issues).
 
 ## Licence
 
