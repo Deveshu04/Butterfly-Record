@@ -7,6 +7,8 @@ a link is optional and goes through a server you run yourself. The Windows app c
 transcribe recordings on your PC, and with your own Sarvam AI API key translate, dub and
 summarize them.
 
+[![A one-minute tour of the Windows app](assets/demo.jpg)](https://deveshu04.github.io/media/butterfly-record.mp4)
+
 ## Download
 
 ### Windows app
