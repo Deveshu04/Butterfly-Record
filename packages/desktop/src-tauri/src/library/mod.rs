@@ -1,3 +1,4 @@
+pub mod access;
 pub mod paths;
 
 use std::collections::{BTreeMap, HashSet};
@@ -16,10 +17,11 @@ use crate::error::{blocking, Code, IpcError, IpcResult};
 use crate::fsio::Files;
 use crate::recording::Recorders;
 use crate::{fsio, lock, platform, settings};
+use access::{move_error, write_error, Access};
 use paths::{
     check_export_ext, check_id, check_name, extension_of, is_media_path, is_openable_file, is_ulid,
     is_within, parse_relative, parse_user_path, path_key, relative_to, safe_base_name, unique_name,
-    APP_DIR, MANIFEST, MEDIA_EXTENSIONS, SOURCE_PART,
+    APP_DIR, LIBRARY_FOLDER, MANIFEST, MEDIA_EXTENSIONS, SOURCE_PART,
 };
 
 pub const LIBRARY_DIR_ENV: &str = "BUTTERFLY_RECORD_LIBRARY_DIR";
@@ -135,12 +137,7 @@ impl Library {
     /// Creates the root and the hidden `.butterfly` folder when missing.
     pub fn ensure_app_dir(&self) -> IpcResult<PathBuf> {
         let app_dir = self.app_dir();
-        if !app_dir.is_dir() {
-            fs::create_dir_all(&app_dir)?;
-            if let Err(error) = platform::set_hidden(&app_dir) {
-                log::warn!("could not hide the app data folder: {error}");
-            }
-        }
+        create_app_dir(&app_dir).map_err(|error| write_error(error, &app_dir))?;
         Ok(app_dir)
     }
 
@@ -270,6 +267,16 @@ impl Library {
     }
 }
 
+fn create_app_dir(app_dir: &Path) -> io::Result<()> {
+    if !app_dir.is_dir() {
+        fs::create_dir_all(app_dir)?;
+        if let Err(error) = platform::set_hidden(app_dir) {
+            log::warn!("could not hide the app data folder: {error}");
+        }
+    }
+    Ok(())
+}
+
 /// `manifest.media` resolved to an absolute path, plus whether it is external.
 fn media_of(
     root: &Path,
@@ -384,6 +391,45 @@ pub async fn library_info(library: State<'_, Library>) -> IpcResult<LibraryInfo>
     blocking(move || Ok(library.info())).await
 }
 
+fn ensure_idle(shell: &Shell, recorders: &Recorders, files: &Files) -> IpcResult<()> {
+    // Open sessions resolve their files against the root; switching it would split them.
+    if !shell.is_idle() || recorders.any_open() || files.has_writers() {
+        return Err(IpcError::busy(
+            "Finish the recording or the running task before changing the library folder.",
+        ));
+    }
+    Ok(())
+}
+
+/// Makes `root` the library folder once a test write there succeeds, so a folder Windows
+/// will not let the app write to is refused up front. `create` allows a folder not made yet.
+async fn switch_root(
+    app: &AppHandle,
+    library: Library,
+    root: PathBuf,
+    create: bool,
+) -> IpcResult<LibraryInfo> {
+    let info = blocking({
+        let root = root.clone();
+        move || {
+            if !create && !root.is_dir() {
+                return Err(IpcError::not_found("That folder no longer exists."));
+            }
+            access::probe(&root)?;
+            library.persist_root(&root)?;
+            library.set_root(root);
+            Ok(library.info())
+        }
+    })
+    .await?;
+    allow_asset_dir(app, &root);
+    Ok(info)
+}
+
+fn home_root(app: &AppHandle) -> IpcResult<PathBuf> {
+    Ok(app.path().home_dir()?.join(LIBRARY_FOLDER))
+}
+
 #[tauri::command]
 pub async fn library_set_root(
     app: AppHandle,
@@ -393,34 +439,46 @@ pub async fn library_set_root(
     files: State<'_, Files>,
     path: String,
 ) -> IpcResult<LibraryInfo> {
-    // Open sessions resolve their files against the root; switching it would split them.
-    if !shell.is_idle() || recorders.any_open() || files.has_writers() {
-        return Err(IpcError::busy(
-            "Finish the recording or the running task before changing the library folder.",
-        ));
-    }
-    let library = library.inner().clone();
+    ensure_idle(&shell, &recorders, &files)?;
     let root = parse_user_path(&path)?;
     if !lock(&library.0.picked_folders).contains(&path_key(&root)) {
         return Err(IpcError::forbidden(
             "Choose the folder in the folder picker first.",
         ));
     }
-    let info = blocking({
-        let library = library.clone();
+    switch_root(&app, library.inner().clone(), root, false).await
+}
+
+/// Moves the library to `%USERPROFILE%\Butterfly Record`, which Controlled folder access does
+/// not protect by default.
+#[tauri::command]
+pub async fn library_use_home_root(
+    app: AppHandle,
+    library: State<'_, Library>,
+    shell: State<'_, Shell>,
+    recorders: State<'_, Recorders>,
+    files: State<'_, Files>,
+) -> IpcResult<LibraryInfo> {
+    ensure_idle(&shell, &recorders, &files)?;
+    let root = home_root(&app)?;
+    switch_root(&app, library.inner().clone(), root, true).await
+}
+
+#[tauri::command]
+pub async fn library_check_access(
+    app: AppHandle,
+    library: State<'_, Library>,
+) -> IpcResult<Access> {
+    let root = library.root();
+    let checked = blocking({
         let root = root.clone();
-        move || {
-            if !root.is_dir() {
-                return Err(IpcError::not_found("That folder no longer exists."));
-            }
-            library.persist_root(&root)?;
-            library.set_root(root);
-            Ok(library.info())
-        }
+        move || Ok(access::probe(&root))
     })
     .await?;
-    allow_asset_dir(&app, &root);
-    Ok(info)
+    if checked.is_ok() {
+        allow_asset_dir(&app, &root);
+    }
+    Ok(Access::new(&root, checked, home_root(&app).ok()))
 }
 
 #[tauri::command]
@@ -457,7 +515,7 @@ pub async fn session_create(library: State<'_, Library>, id: String) -> IpcResul
     blocking(move || {
         let dir = library.session_dir(&id)?;
         library.ensure_app_dir()?;
-        fs::create_dir_all(&dir)?;
+        fs::create_dir_all(&dir).map_err(|error| write_error(error, &dir))?;
         Ok(dir.to_string_lossy().into_owned())
     })
     .await
@@ -583,7 +641,7 @@ fn rename_media(library: &Library, id: &str, base_name: &str) -> IpcResult<Strin
         current.clone()
     } else if current_name.eq_ignore_ascii_case(&wanted) {
         let target = dir.join(&wanted);
-        fs::rename(&current, &target)?;
+        fs::rename(&current, &target).map_err(|error| move_error(error, &current, &target))?;
         target
     } else {
         move_unique(&current, &dir, &base, &ext)?
@@ -595,7 +653,10 @@ fn rename_media(library: &Library, id: &str, base_name: &str) -> IpcResult<Strin
         manifest["media"]["path"] = Value::String(rel.clone());
         let written = serde_json::to_vec_pretty(&manifest)
             .map_err(IpcError::from)
-            .and_then(|bytes| Ok(fsio::write_atomic(&manifest_path, &bytes)?));
+            .and_then(|bytes| {
+                fsio::write_atomic(&manifest_path, &bytes)
+                    .map_err(|error| write_error(error, &manifest_path))
+            });
         if let Err(error) = written {
             let _ = fs::rename(&renamed, &current);
             return Err(error);
@@ -613,7 +674,7 @@ pub fn move_unique(from: &Path, dir: &Path, base: &str, ext: &str) -> IpcResult<
         match platform::move_no_replace(from, &target) {
             Ok(()) => return Ok(target),
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => start = n + 1,
-            Err(error) => return Err(error.into()),
+            Err(error) => return Err(move_error(error, from, &target)),
         }
     }
 }

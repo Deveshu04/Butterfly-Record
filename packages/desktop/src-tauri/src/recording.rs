@@ -11,6 +11,7 @@ use tauri::State;
 
 use crate::error::{blocking, IpcError, IpcResult};
 use crate::fsio::{header, raw_body};
+use crate::library::access::write_error;
 use crate::library::paths::{check_id, SOURCE_PART};
 use crate::library::Library;
 use crate::lock;
@@ -58,7 +59,8 @@ pub async fn rec_open(
             .write(true)
             .create(true)
             .truncate(true)
-            .open(&path)?;
+            .open(&path)
+            .map_err(|error| write_error(error, &path))?;
         Ok(Sink {
             file,
             path,

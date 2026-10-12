@@ -10,12 +10,14 @@
   } from '../lib/camera-layout.ts'
   import { listMicrophones, recorder } from '../lib/recorder.svelte.ts'
   import { settings, type AppSettings } from '../lib/settings.svelte.ts'
+  import { storageAccess } from '../lib/storage-access.svelte.ts'
   import Button from '../components/Button.svelte'
   import IconButton from '../components/IconButton.svelte'
   import LevelMeter from '../components/LevelMeter.svelte'
   import ProgressBar from '../components/ProgressBar.svelte'
   import Select from '../components/Select.svelte'
   import SettingRow from '../components/SettingRow.svelte'
+  import StorageNotice from '../components/StorageNotice.svelte'
   import Switch from '../components/Switch.svelte'
   import { confirmDialog } from '../components/confirm.svelte.ts'
   import { formatBytes, formatClock } from '../components/format.ts'
@@ -153,6 +155,8 @@
   }
 
   onMount(() => {
+    // Ahead of the click: Start must reach the picker without awaiting anything.
+    void storageAccess.check()
     if (recording.microphoneEnabled) void loadMicrophones()
     if (recording.camera.enabled) void loadCameras()
     void camera.preview(true)
@@ -212,6 +216,8 @@
   {#if phase === 'idle'}
     <div class="column">
       <h1>New recording</h1>
+
+      <StorageNotice />
 
       {#if recorder.error}
         <div class="alert" role="alert">

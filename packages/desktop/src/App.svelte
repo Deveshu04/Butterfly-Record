@@ -3,9 +3,11 @@
   import { library } from './lib/library.svelte.ts'
   import { recorder } from './lib/recorder.svelte.ts'
   import { settings } from './lib/settings.svelte.ts'
+  import { storageAccess } from './lib/storage-access.svelte.ts'
   import ConfirmDialog from './components/ConfirmDialog.svelte'
   import Menu from './components/Menu.svelte'
   import Sidebar from './components/Sidebar.svelte'
+  import StorageAccessDialog from './components/StorageAccessDialog.svelte'
   import Toasts from './components/Toasts.svelte'
   import { baseName } from './components/format.ts'
   import { router } from './components/router.svelte.ts'
@@ -46,6 +48,7 @@
 
   onMount(() => {
     void sarvamKey.refresh()
+    void storageAccess.check()
   })
 </script>
 
@@ -69,6 +72,7 @@
 <Toasts />
 <Menu />
 <ConfirmDialog />
+<StorageAccessDialog />
 
 <style>
   .shell {

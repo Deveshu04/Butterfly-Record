@@ -151,6 +151,21 @@ pub fn open(path: &Path) -> io::Result<()> {
         .map(drop)
 }
 
+/// Windows Security's ransomware protection page, where an app is allowed through Controlled
+/// folder access.
+#[cfg(windows)]
+pub fn open_ransomware_protection() -> io::Result<()> {
+    std::process::Command::new(explorer())
+        .arg("windowsdefender://RansomwareProtection/")
+        .spawn()
+        .map(drop)
+}
+
+#[cfg(not(windows))]
+pub fn open_ransomware_protection() -> io::Result<()> {
+    Err(io::Error::from(io::ErrorKind::Unsupported))
+}
+
 #[cfg(not(windows))]
 pub fn reveal(_path: &Path) -> io::Result<()> {
     Err(io::Error::from(io::ErrorKind::Unsupported))

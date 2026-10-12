@@ -15,6 +15,7 @@ import {
   libraryList,
   librarySetRoot,
   libraryTrash,
+  libraryUseHomeRoot,
   mediaRename,
   openPath,
   pickFolder,
@@ -45,6 +46,7 @@ import {
   recoverSession,
   type MediaInfo,
 } from './media.ts'
+import { storageAccess } from './storage-access.svelte.ts'
 import { cleanTitle, fileName, fileStem, mediaBaseName } from './titles.ts'
 
 export type VideoStatus = 'ready' | 'recording' | 'needs-recovery' | 'missing'
@@ -301,6 +303,8 @@ async function importPaths(paths: string[]): Promise<string[]> {
         imported.push(id)
       })
     } catch (error) {
+      // Every other file would be refused the same way; the dialog explains it once.
+      if (storageAccess.report(error, 'import')) break
       // The remaining files still import; the failures are reported together at the end.
       failed.push({ name: fileName(path), message: errorMessage(error) })
     }
@@ -337,15 +341,27 @@ async function openFolder(): Promise<void> {
   await openPath(current.root)
 }
 
-async function changeRoot(): Promise<void> {
+function ensureRootMovable(): void {
   // Sessions in flight resolve their files against the root, so it must not move under them.
   if (activeRecording || importing > 0 || anyFinalizing()) {
     throw new Error('Finish the recording or the running task before changing the library folder.')
   }
+}
+
+/** Rust refuses a folder it cannot write to, with the reason. */
+async function changeRoot(): Promise<void> {
+  ensureRootMovable()
   const picked = await pickFolder()
   if (!picked) return
   info = await librarySetRoot(picked)
-  await refresh()
+  await Promise.all([refresh(), storageAccess.check()])
+}
+
+/** Moves the library to %USERPROFILE%\Butterfly Record, outside the protected folders. */
+async function useHomeRoot(): Promise<void> {
+  ensureRootMovable()
+  info = await libraryUseHomeRoot()
+  await Promise.all([refresh(), storageAccess.check()])
 }
 
 export const library = {
@@ -369,4 +385,5 @@ export const library = {
   revealPath: (path: string): Promise<void> => revealPathIpc(path),
   openFolder,
   changeRoot,
+  useHomeRoot,
 }

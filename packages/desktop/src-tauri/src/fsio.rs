@@ -12,6 +12,7 @@ use tauri::ipc::{InvokeBody, Request, Response};
 use tauri::State;
 
 use crate::error::{blocking, IpcError, IpcResult};
+use crate::library::access::{move_error, write_error};
 use crate::library::paths::{
     check_export_ext, check_name, is_openable_file, is_within, parse_user_path, path_key,
     relative_to, safe_base_name, SOURCE_PART,
@@ -349,7 +350,8 @@ fn create_writer(library: &Library, target: WriteTarget) -> IpcResult<Writer> {
         WriteTarget::Media { id, base_name, ext } | WriteTarget::Output { id, base_name, ext } => {
             let ext = check_export_ext(&ext)?;
             let session = library.existing_session(&id)?;
-            let (partial, file) = create_temp(&session)?;
+            let (partial, file) =
+                create_temp(&session).map_err(|error| write_error(error, &session))?;
             Ok(Writer {
                 file,
                 partial,
@@ -364,7 +366,8 @@ fn create_writer(library: &Library, target: WriteTarget) -> IpcResult<Writer> {
         WriteTarget::Sidecar { id, name } => {
             check_name(&name)?;
             let session = library.existing_session(&id)?;
-            let (partial, file) = create_temp(&session)?;
+            let (partial, file) =
+                create_temp(&session).map_err(|error| write_error(error, &session))?;
             Ok(Writer {
                 file,
                 partial,
@@ -392,7 +395,8 @@ fn create_writer(library: &Library, target: WriteTarget) -> IpcResult<Writer> {
                 .write(true)
                 .create(true)
                 .truncate(true)
-                .open(&partial)?;
+                .open(&partial)
+                .map_err(|error| write_error(error, &partial))?;
             Ok(Writer {
                 file,
                 partial,
@@ -443,7 +447,8 @@ pub async fn fs_commit(files: State<'_, Files>, handle: u32) -> IpcResult<Commit
                     path
                 }
                 Dest::Replace(path) => {
-                    fs::rename(&partial, &path)?;
+                    fs::rename(&partial, &path)
+                        .map_err(|error| move_error(error, &partial, &path))?;
                     path
                 }
             };
@@ -525,9 +530,8 @@ pub async fn sidecar_read_text(
 
 fn write_sidecar(library: &Library, id: &str, name: &str, bytes: &[u8]) -> IpcResult<()> {
     check_name(name)?;
-    let session = library.existing_session(id)?;
-    write_atomic(&session.join(name), bytes)?;
-    Ok(())
+    let path = library.existing_session(id)?.join(name);
+    write_atomic(&path, bytes).map_err(|error| write_error(error, &path))
 }
 
 #[tauri::command]

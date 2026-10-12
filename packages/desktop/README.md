@@ -102,6 +102,13 @@ variables exist for it and for debugging:
 
 ## Known limitations
 
+- **Controlled folder access.** When Windows Security's ransomware protection is on, it
+  blocks apps it does not know from writing to Documents, Pictures, Videos, Music, Desktop
+  and Favorites, including the default `Videos\Butterfly Record`. The app checks its
+  library folder at startup and before recording or importing, and offers three ways out:
+  use `%USERPROFILE%\Butterfly Record` instead, choose another folder, or allow the app in
+  **Windows Security > Virus & threat protection > Manage ransomware protection > Allow an
+  app through Controlled folder access** (the dialog shows the exact file to add).
 - System audio can be shared only for screen recordings, not single windows, and only
   when "Share with system audio" is turned on in the picker. Audio from one app alone
   cannot be recorded.

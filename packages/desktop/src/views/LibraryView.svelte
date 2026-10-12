@@ -1,9 +1,11 @@
 <script lang="ts">
   import { library, type VideoItem } from '../lib/library.svelte.ts'
   import { jobs } from '../lib/jobs.svelte.ts'
+  import { storageAccess } from '../lib/storage-access.svelte.ts'
   import Button from '../components/Button.svelte'
   import EmptyState from '../components/EmptyState.svelte'
   import Select from '../components/Select.svelte'
+  import StorageNotice from '../components/StorageNotice.svelte'
   import TextField from '../components/TextField.svelte'
   import VideoCard from '../components/VideoCard.svelte'
   import RenameDialog from './RenameDialog.svelte'
@@ -77,6 +79,7 @@
   })
 
   async function importVideos() {
+    if (!storageAccess.allow('import', () => void importVideos())) return
     importing = true
     try {
       const ids = await library.importFiles()
@@ -167,6 +170,10 @@
       <Button icon="import" busy={importing} onclick={importVideos}>Import video</Button>
     </div>
   </header>
+
+  {#if storageAccess.blocked}
+    <div class="storage"><StorageNotice /></div>
+  {/if}
 
   <div class="scroll">
     {#if library.loading && library.items.length === 0}
@@ -263,6 +270,10 @@
 
   .tools :global(.search) {
     width: 240px;
+  }
+
+  .storage {
+    padding: 0 var(--space-6) var(--space-3);
   }
 
   .scroll {

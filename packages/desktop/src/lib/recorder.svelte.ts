@@ -43,6 +43,7 @@ import { writeManifest } from './manifests.ts'
 import { finalizeSession, generatePoster } from './media.ts'
 import { settings, type AppSettings } from './settings.svelte.ts'
 import { RustChunkSink } from './sink.ts'
+import { storageAccess } from './storage-access.svelte.ts'
 import { defaultRecordingTitle } from './titles.ts'
 
 export type { RecorderPhase }
@@ -238,8 +239,12 @@ class Recorder {
     this.#ticker = null
   }
 
+  readonly #retry = (): void => void this.start()
+
   start(): Promise<void> {
     if (this.#phase !== 'idle' || this.#starting) return this.#starting ?? Promise.resolve()
+    // The cached result: nothing may be awaited ahead of the picker, which needs this click.
+    if (!storageAccess.allow('record', this.#retry)) return Promise.resolve()
     this.#starting = this.#start().finally(() => {
       this.#starting = null
     })
@@ -268,9 +273,13 @@ class Recorder {
     let sessionId: string | null = null
 
     try {
+      // Rechecked alongside the picker, not before it, in case the folder changed since.
+      const access = storageAccess.check()
       // The picker spends the user gesture, so it must be the first thing awaited.
       capture = await acquireCapture(recording)
       if (abort.signal.aborted) throw abortError()
+      await access
+      if (!storageAccess.allow('record', this.#retry)) throw abortError()
       mic = recording.microphoneEnabled ? await openMicrophone(recording.microphoneId) : null
 
       const [videoTrack] = capture.getVideoTracks()
@@ -475,7 +484,9 @@ class Recorder {
       const cancelled =
         error instanceof DOMException &&
         (error.name === 'AbortError' || error.name === 'NotAllowedError')
-      if (!cancelled) this.#error = errorMessage(error)
+      if (!cancelled && !storageAccess.report(error, 'record', this.#retry)) {
+        this.#error = errorMessage(error)
+      }
     }
   }
 

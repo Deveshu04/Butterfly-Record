@@ -13,6 +13,7 @@
   import Select from '../components/Select.svelte'
   import SettingGroup from '../components/SettingGroup.svelte'
   import SettingRow from '../components/SettingRow.svelte'
+  import StorageNotice from '../components/StorageNotice.svelte'
   import Switch from '../components/Switch.svelte'
   import TextField from '../components/TextField.svelte'
   import { confirmDialog } from '../components/confirm.svelte.ts'
@@ -256,12 +257,15 @@
         </Button>
         <Button size="sm" icon="folder-open" onclick={openRoot}>Open</Button>
         {#snippet below()}
-          {#if library.info}
-            <p class="path">
-              <span class="selectable">{library.info.root}</span>
-              <span class="free">{formatBytes(library.info.freeBytes)} free</span>
-            </p>
-          {/if}
+          <div class="below-stack">
+            <StorageNotice />
+            {#if library.info}
+              <p class="path">
+                <span class="selectable">{library.info.root}</span>
+                <span class="free">{formatBytes(library.info.freeBytes)} free</span>
+              </p>
+            {/if}
+          </div>
         {/snippet}
       </SettingRow>
     </SettingGroup>
@@ -454,6 +458,12 @@
     font-size: var(--text-2xl);
     font-weight: 600;
     line-height: 32px;
+  }
+
+  .below-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
   }
 
   .path {

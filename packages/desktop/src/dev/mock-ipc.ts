@@ -26,6 +26,9 @@ export function installMock() {
   const decoder = new TextDecoder()
 
   let root = ROOT
+  /** `?blocked` stands in for Controlled folder access refusing the default folder. */
+  const blockedRoot = new URLSearchParams(location.search).has('blocked') ? ROOT : null
+  const BLOCKED = 'Windows Security is blocking Butterfly Record from saving to your Videos folder (Controlled folder access).'
   const sessions = new Map<string, Session>()
   /** Absolute path → bytes, for media in the library folder and imported files elsewhere. */
   const files = new Map<string, Bytes>()
@@ -351,10 +354,30 @@ export function installMock() {
       case 'library_set_root':
         root = String(args.path)
         return { root, defaultRoot: ROOT, freeBytes: 911.7 * 1024 ** 3 }
+      case 'library_use_home_root':
+        root = 'C:\\Users\\Asha\\Butterfly Record'
+        return { root, defaultRoot: ROOT, freeBytes: 182.4 * 1024 ** 3 }
+      case 'library_check_access': {
+        const blocked = root === blockedRoot
+        return {
+          ok: !blocked,
+          root,
+          reason: blocked ? 'blocked' : 'ok',
+          detail: blocked ? BLOCKED : '',
+          protectedFolder: root === ROOT,
+          folderName: root === ROOT ? 'Videos' : null,
+          homeRoot: 'C:\\Users\\Asha\\Butterfly Record',
+          exePath: 'C:\\Users\\Asha\\AppData\\Local\\Butterfly Record\\butterfly-record-desktop.exe',
+        }
+      }
+      case 'open_windows_security':
+        console.info(`[mock] ${cmd}`)
+        return null
       case 'library_list':
         await ready()
         return [...sessions.keys()].sort().reverse().map(libraryItem)
       case 'session_create':
+        if (root === blockedRoot) fail('blocked', `${BLOCKED} Allow Butterfly Record in Windows Security, or use a folder outside Videos.`)
         sessions.set(String(args.id), { files: new Map() })
         return sessionDir(String(args.id))
       case 'library_trash': {

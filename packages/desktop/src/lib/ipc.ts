@@ -6,13 +6,9 @@ import { invoke } from '@tauri-apps/api/core'
 import { emitTo, listen, type UnlistenFn } from '@tauri-apps/api/event'
 
 import type { CameraAnchor, CameraCorner, CameraShape } from './camera-layout.ts'
+import { isIpcError } from './errors.ts'
 
-export interface IpcError {
-  code: string
-  message: string
-  status?: number
-  requestId?: string
-}
+export { errorMessage, isBlocked, isIpcError, type IpcError } from './errors.ts'
 
 export interface DesktopOutput {
   kind: 'dub' | 'captions'
@@ -34,6 +30,23 @@ export interface LibraryInfo {
   root: string
   defaultRoot: string
   freeBytes: number
+}
+
+export interface LibraryAccess {
+  ok: boolean
+  root: string
+  /** 'blocked': Windows refused writes to a folder that exists, usually Controlled folder access. */
+  reason: 'ok' | 'blocked' | 'denied' | 'missing' | 'other'
+  /** Why the folder cannot be used; empty when it can. */
+  detail: string
+  /** The folder lies in one Controlled folder access protects by default. */
+  protectedFolder: boolean
+  /** That folder's name, e.g. 'Videos'. */
+  folderName: string | null
+  /** %USERPROFILE%\Butterfly Record, outside the protected folders. */
+  homeRoot: string | null
+  /** This program, for allowing it in Windows Security. */
+  exePath: string | null
 }
 
 export interface LibraryItem {
@@ -215,62 +228,6 @@ export interface HudAction {
   action: HudActionName
 }
 
-export function isIpcError(e: unknown): e is IpcError {
-  return (
-    typeof e === 'object' &&
-    e !== null &&
-    typeof (e as IpcError).code === 'string' &&
-    typeof (e as IpcError).message === 'string'
-  )
-}
-
-const FRIENDLY: Record<string, string> = {
-  not_found: 'The file could not be found. It may have been moved or deleted.',
-  disk_full: 'The disk is full. Free up some space and try again.',
-  forbidden: 'Butterfly Record is not allowed to use that location.',
-  no_key: 'Add your Sarvam API key in Settings first.',
-  invalid_key: 'Sarvam rejected the API key. Check it in Settings.',
-  quota: 'Your Sarvam credits have run out. Top up at dashboard.sarvam.ai and try again.',
-  rate_limited: 'Sarvam is receiving too many requests right now. Wait a minute and try again.',
-  too_large: 'This file is larger or longer than Sarvam accepts on your plan.',
-  network: 'Could not reach Sarvam. Check your internet connection and try again.',
-  cancelled: 'Cancelled.',
-}
-
-/** A user-facing sentence for any thrown value. */
-export function errorMessage(e: unknown): string {
-  if (isIpcError(e)) {
-    const friendly = FRIENDLY[e.code]
-    if (friendly) return friendly
-    const detail = e.message.trim()
-    switch (e.code) {
-      case 'invalid_argument':
-        return detail || 'The request was not valid.'
-      case 'io':
-        return detail ? `A file operation failed: ${detail}` : 'A file operation failed.'
-      case 'unsupported':
-        return detail || 'Sarvam does not support this language or file.'
-      case 'api': {
-        const reference = e.requestId ? ` (request ${e.requestId})` : ''
-        return detail
-          ? `Sarvam returned an error: ${detail}${reference}`
-          : `Sarvam returned an error${reference}.`
-      }
-      default:
-        return detail || 'Something went wrong.'
-    }
-  }
-  if (e instanceof DOMException) {
-    if (e.name === 'NotAllowedError') return 'Permission was denied.'
-    if (e.name === 'NotFoundError') return 'The requested device was not found.'
-    if (e.name === 'NotReadableError') return 'The device is in use by another application.'
-    if (e.name === 'AbortError') return 'Cancelled.'
-  }
-  if (e instanceof Error) return e.message || 'Something went wrong.'
-  if (typeof e === 'string' && e.trim()) return e
-  return 'Something went wrong.'
-}
-
 /** Rust rejects with IpcError objects; anything else (a bare string) becomes an Error. */
 async function call<T>(
   cmd: string,
@@ -289,6 +246,11 @@ async function call<T>(
 
 export const libraryInfo = () => call<LibraryInfo>('library_info')
 export const librarySetRoot = (path: string) => call<LibraryInfo>('library_set_root', { path })
+export const libraryUseHomeRoot = () => call<LibraryInfo>('library_use_home_root')
+/** Creates the library folder when missing and writes a test file there. */
+export const libraryCheckAccess = () => call<LibraryAccess>('library_check_access')
+/** Windows Security's ransomware protection page. */
+export const openWindowsSecurity = () => call<void>('open_windows_security')
 export const libraryList = () => call<LibraryItem[]>('library_list')
 export const sessionCreate = (id: string) => call<string>('session_create', { id })
 export const libraryTrash = (id: string) => call<void>('library_trash', { id })

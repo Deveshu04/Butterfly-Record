@@ -2,6 +2,7 @@
   import { Butterfly, Icon, type IconName } from '@butterfly-record/ui'
   import { library } from '../lib/library.svelte.ts'
   import { recorder } from '../lib/recorder.svelte.ts'
+  import { storageAccess } from '../lib/storage-access.svelte.ts'
   import { formatBytes, formatClock, baseName } from './format.ts'
   import { quitNotice } from './quit-notice.svelte.ts'
   import { href, router } from './router.svelte.ts'
@@ -107,16 +108,23 @@
       </a>
     {/if}
     {#if library.info}
+      {@const blocked = storageAccess.blocked}
       <button
         type="button"
         class="foot-item"
-        title="Open {library.info.root} in File Explorer"
-        onclick={openFolder}
+        title={blocked
+          ? `Butterfly Record can’t save to ${library.info.root}. Show how to fix it`
+          : `Open ${library.info.root} in File Explorer`}
+        onclick={blocked ? () => storageAccess.open() : openFolder}
       >
-        <Icon name="folder" size={16} />
+        {#if blocked}
+          <span class="status caution" aria-hidden="true"><Icon name="alert" size={16} /></span>
+        {:else}
+          <Icon name="folder" size={16} />
+        {/if}
         <span class="label folder">
           <span class="folder-name">{folderName}</span>
-          <span class="free">{formatBytes(library.info.freeBytes)} free</span>
+          <span class="free">{blocked ? 'Can’t save here' : `${formatBytes(library.info.freeBytes)} free`}</span>
         </span>
       </button>
     {/if}
@@ -291,6 +299,10 @@
 
   .status.ok :global(svg) {
     color: var(--ok);
+  }
+
+  .status.caution :global(svg) {
+    color: var(--caution);
   }
 
   .foot-item:has(.folder) {

@@ -5,6 +5,7 @@ import { ulid } from '@butterfly-record/core'
 import { ConversionCanceledError } from 'mediabunny'
 
 import { errorMessage, isIpcError, onSarvamProgress, sarvamCancel } from './ipc.ts'
+import { storageAccess } from './storage-access.svelte.ts'
 
 export type JobKind = 'transcribe' | 'translate' | 'dub' | 'summarize' | 'recover' | 'import'
 
@@ -115,6 +116,8 @@ export async function runJob<T>(
         job.stage = 'failed'
         job.error = errorMessage(error)
         job.message = job.error
+        // A write Windows refused needs the folder dialog, not just a line in the job list.
+        storageAccess.report(error, 'notice')
       }
     }
     throw error

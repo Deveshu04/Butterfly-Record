@@ -10,6 +10,8 @@ pub enum Code {
     Io,
     DiskFull,
     Forbidden,
+    /// Windows refused the write although the folder exists, e.g. Controlled folder access.
+    Blocked,
     Busy,
     NoKey,
     InvalidKey,
@@ -150,6 +152,8 @@ mod tests {
             bare,
             serde_json::json!({ "code": "invalid_argument", "message": "x" })
         );
+        let blocked = serde_json::to_value(IpcError::new(Code::Blocked, "y")).unwrap();
+        assert_eq!(blocked["code"], "blocked");
     }
 
     #[test]

@@ -56,6 +56,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let videos = paths
         .video_dir()
         .or_else(|_| paths.home_dir().map(|home| home.join("Videos")))?;
+    library::access::init(paths);
 
     let library = Library::load(videos.join(LIBRARY_FOLDER), config_dir.join("library.json"));
     let root = library.root();
@@ -93,6 +94,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             library::library_info,
             library::library_set_root,
+            library::library_use_home_root,
+            library::library_check_access,
+            library::access::open_windows_security,
             library::library_list,
             library::session_create,
             library::library_trash,
