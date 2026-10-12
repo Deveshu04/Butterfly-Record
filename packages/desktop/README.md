@@ -26,8 +26,9 @@ covers features, the build and known limitations.
   dim picture. You are found in each frame on your PC by the MediaPipe Selfie
   Segmentation model, which ships with the app; nothing is downloaded or uploaded. A
   chosen picture is copied into the app's own folder, so moving or deleting the original
-  does not matter. The overlay and window recordings draw the effect the same way, so the
-  video looks like the preview.
+  does not matter. Screen recordings capture the overlay as it is drawn, so the video
+  looks like the preview. Window recordings keep the touch-up but not the background (see
+  the limitations below).
 - **Alt+Shift+R** opens New recording from anywhere, or stops a recording in progress;
   the menu of the notification-area icon does the same. Closing the window leaves the
   app running there unless you turn that off in Settings.
@@ -165,11 +166,12 @@ variables exist for it and for debugging:
   If that window covers only part of the screen, the camera lands at the matching fraction
   of the video rather than over the same point of the desktop.
 - Background effects take a moment to start each time the camera opens, while the model
-  loads. Until it has found you, the overlay shows the plain camera, and a window
-  recording leaves the camera out rather than show the background you chose to hide; the
-  countdown usually covers this. The model runs on the CPU in the background, about 10 to
+  loads. Until it has found you, the overlay shows the plain camera. The model runs on the CPU in the background, about 10 to
   20 times a second on a typical laptop, so the edge can trail a fast movement, and people
   in posters or photos behind you may be kept in the picture.
+- Window recordings show the camera without its background: running the model for the
+  recording as well as for the overlay stalls the recording on modest PCs. The touch-up
+  still applies. Screen recordings keep every effect.
 - The shortcut and the tray open the recorder but cannot start it by themselves: the
   screen picker needs a click or a key press in the app window.
 - The screen picker is WebView2's own and refers to the app as "tauri.localhost".

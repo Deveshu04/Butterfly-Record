@@ -19,7 +19,7 @@ import { getVersion } from '@tauri-apps/api/app'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 
 import { displayVideoConstraints } from './app-settings.ts'
-import { shownBackground, type CameraEffects } from './camera-effects.ts'
+import { compositedEffects, shownBackground, type CameraEffects } from './camera-effects.ts'
 import { camera, openCameraStream } from './camera.svelte.ts'
 import { compositeSupported, startCameraComposite, type CameraComposite } from './compositor.ts'
 import {
@@ -329,12 +329,13 @@ class Recorder {
       this.#micMuted = false
 
       const cameraTrack = cameraStream?.getVideoTracks()[0] ?? null
-      // Started before the countdown, so a background effect is ready by the first frame.
+      // Started before the countdown, so the touch-up is ready by the first frame.
       if (cameraMode === 'composited' && cameraTrack && compositeSupported()) {
         // The overlay is a preview here, kept out of the capture, so where the user has put
         // it on screen is the only thing that says where it belongs in the video.
         const anchor = await camera.anchor()
-        const background = await backgroundFor(wanted.effects)
+        const effects = compositedEffects(wanted.effects)
+        const background = await backgroundFor(effects)
         try {
           composite = startCameraComposite({
             screen: videoTrack,
@@ -344,7 +345,7 @@ class Recorder {
             anchor,
             corner: wanted.corner,
             mirror: wanted.mirror,
-            effects: wanted.effects,
+            effects,
             background,
             onFailed: (message) => (this.#error = message),
             onEffectsFailed: (message) => (this.#error = message),

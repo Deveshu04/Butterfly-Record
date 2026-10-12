@@ -85,6 +85,14 @@ export function effectsActive(effects: CameraEffects): boolean {
   return needsSegmentation(effects) || effects.touchUp
 }
 
+/**
+ * What a window recording draws. Its camera goes without a background: running the model
+ * there as well as in the overlay stalls the recording on modest PCs.
+ */
+export function compositedEffects(effects: CameraEffects): CameraEffects {
+  return { ...effects, background: 'none' }
+}
+
 export interface Size {
   width: number
   height: number

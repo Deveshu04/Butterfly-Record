@@ -15,11 +15,14 @@
   let {
     effects,
     overlay,
+    windowScope,
     onchange,
   }: {
     effects: CameraEffects
     /** How the overlay is getting on with drawing the effect. */
     overlay: CameraEffectState
+    /** Window recordings draw the camera without its background. */
+    windowScope: boolean
     onchange: (patch: (draft: CameraEffects) => void) => Promise<void>
   } = $props()
 
@@ -59,9 +62,11 @@
   const notice = $derived(
     overlay.status === 'failed'
       ? overlay.message
-      : overlay.status === 'starting' && effects.background !== 'none'
-        ? 'Getting the background ready…'
-        : null,
+      : windowScope && effects.background !== 'none'
+        ? 'Window recordings show the camera without its background. Screen recordings keep it.'
+        : overlay.status === 'starting' && effects.background !== 'none'
+          ? 'Getting the background ready…'
+          : null,
   )
 
   $effect(() => {

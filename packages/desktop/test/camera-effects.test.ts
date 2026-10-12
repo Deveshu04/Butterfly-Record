@@ -4,6 +4,7 @@ import { describe, it } from 'node:test'
 import {
   approachTone,
   blurPlan,
+  compositedEffects,
   DEFAULT_CAMERA_EFFECTS,
   effectsActive,
   MAX_BLUR_RADIUS,
@@ -49,6 +50,15 @@ describe('which effects run', () => {
     const touchUp = effects({ touchUp: true })
     assert.equal(effectsActive(touchUp), true)
     assert.equal(needsSegmentation(touchUp), false)
+  })
+
+  it('records a window recording with the touch-up but without a background', () => {
+    const blurred = effects({ background: 'blur', blur: 'strong', touchUp: true })
+    const recorded = compositedEffects(blurred)
+    assert.equal(needsSegmentation(recorded), false)
+    assert.equal(recorded.touchUp, true)
+    assert.equal(blurred.background, 'blur')
+    assert.equal(effectsActive(compositedEffects(effects({ background: 'color' }))), false)
   })
 
   it('compares every field', () => {

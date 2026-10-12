@@ -163,7 +163,7 @@ function portInUse(port) {
 }
 
 // The e2e package sits outside the workspace; core's copy of Mediabunny reads the result.
-const { ALL_FORMATS, FilePathSource, Input } = createRequire(
+const { ALL_FORMATS, EncodedPacketSink, FilePathSource, Input } = createRequire(
   path.join(ROOT, 'packages', 'core', 'package.json'),
 )('mediabunny')
 
@@ -183,6 +183,19 @@ async function probe(file) {
         ? { codec: await audio.getCodec(), channels: await audio.getNumberOfChannels(), sampleRate: await audio.getSampleRate() }
         : null,
     }
+  } finally {
+    input.dispose()
+  }
+}
+
+async function videoFrames(file) {
+  const input = new Input({ source: new FilePathSource(file), formats: ALL_FORMATS })
+  try {
+    const track = await input.getPrimaryVideoTrack()
+    if (!track) return 0
+    let count = 0
+    for await (const packet of new EncodedPacketSink(track).packets()) count += packet ? 1 : 0
+    return count
   } finally {
     input.dispose()
   }
@@ -470,6 +483,32 @@ async function main() {
     report.imported = { id: importedId, media: imported.media, duration: imported.duration, title: imported.title }
 
     await screenshotViews(mainWindow, id)
+
+    // A window recording draws the camera into every frame in a worker of its own
+
+    if (FAKE_CAPTURE) {
+      await go(mainWindow, '#/record')
+      await mainWindow.getByRole('radio', { name: /^Window/ }).click()
+      await waitFor('the camera overlay', 20_000, async () => cameraPage(context))
+      const before = new Set(sessions(library))
+      await mainWindow.getByRole('button', { name: 'Start recording' }).click()
+      const windowId = await waitFor('the window recording session', 30_000, async () =>
+        sessions(library).find((session) => !before.has(session)),
+      )
+      const bar = await waitFor('the recording controls window', 15_000, async () =>
+        context.pages().find((page) => page.url().includes('/hud.html')),
+      )
+      await sleep(RECORD_SECONDS * 1000)
+      await bar.getByRole('button', { name: 'Stop' }).click()
+      const composited = await waitFor('the window recording', 120_000, async () => {
+        const current = readManifest(library, windowId)
+        return current?.status === 'ready' ? current : null
+      })
+      check('a window recording composites the camera', composited.camera?.mode === 'composited', composited.camera)
+      // At least 10 fps, so a compositor that stalls partway through fails here.
+      const frames = await videoFrames(path.join(library, composited.media.path))
+      check('the window recording keeps its frames coming', frames >= RECORD_SECONDS * 10, { frames, duration: composited.duration })
+    }
 
     // Quit through the command the app uses itself
 

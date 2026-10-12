@@ -337,6 +337,7 @@
           <CameraEffectSettings
             effects={cam.effects}
             overlay={camera.effect}
+            windowScope={recording.scope === 'window'}
             onchange={(patch) => changeCamera((draft) => patch(draft.effects))}
           />
           <SettingRow
